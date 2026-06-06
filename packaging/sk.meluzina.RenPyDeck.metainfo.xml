@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>sk.meluzina.RenPyDeck</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>RenPyDeck</name>
+  <summary>Game manager and launcher for Ren'Py games on the Steam Deck</summary>
+  <description>
+    <p>
+      RenPyDeck keeps your collection of downloaded Ren'Py games in one place and
+      turns the download, install, play and uninstall lifecycle into a few taps in a
+      clean graphical interface. It is designed first and foremost for the Steam Deck.
+    </p>
+    <p>
+      This early release contains only the application shell with an on-screen Exit
+      button, used to verify that the application installs and launches on the Steam
+      Deck.
+    </p>
+  </description>
+  <launchable type="desktop-id">sk.meluzina.RenPyDeck.desktop</launchable>
+  <categories>
+    <category>Game</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-06-06">
+      <description>
+        <p>Initial packaging milestone: application shell with an Exit button.</p>
+      </description>
+    </release>
+  </releases>
+</component>

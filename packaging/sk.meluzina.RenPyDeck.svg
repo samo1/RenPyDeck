@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3584e4"/>
+      <stop offset="1" stop-color="#1c4fa0"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="url(#bg)"/>
+  <!-- Stylised play triangle to evoke "launcher" -->
+  <path d="M52 40 L92 64 L52 88 Z" fill="#ffffff"/>
+  <!-- Small "deck" baseline -->
+  <rect x="36" y="98" width="56" height="8" rx="4" fill="#ffffff" opacity="0.85"/>
+</svg>

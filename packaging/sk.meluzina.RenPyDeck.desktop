@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=RenPyDeck
+GenericName=Ren'Py Game Manager
+Comment=Game manager and launcher for Ren'Py games on the Steam Deck
+Exec=renpydeck
+Icon=sk.meluzina.RenPyDeck
+Terminal=false
+Categories=Game;
+Keywords=renpy;visual novel;game;launcher;steam deck;

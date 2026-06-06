@@ -1,0 +1,25 @@
+# --- RenPyDeck data folders (user content, not source) ---
+# Downloaded game archives and extracted/installed games.
+/download/
+/games/
+
+# --- Build / packaging output ---
+/build/
+/dist/
+*.flatpak
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# --- Editor / OS cruft ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
