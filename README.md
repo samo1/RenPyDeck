@@ -104,14 +104,26 @@ close button.
 
 - **Language:** Python — a natural fit alongside the Ren'Py engine, which is itself
   Python-based.
-- **UI:** A graphical desktop interface presenting the downloaded and installed game lists
-  and the install / run / uninstall / exit actions.
-- **Packaging:** A single-file **Flatpak bundle** for distribution.
+- **UI:** **GTK 4** via **PyGObject** (`gi`), presenting the downloaded and installed game
+  lists and the install / run / uninstall / exit actions.
+- **Packaging:** A single-file **Flatpak bundle** built on the **GNOME 49 runtime** (which
+  already ships Python 3 + GTK 4 + PyGObject, so no extra dependencies are bundled).
 
 ### Project layout
 
 ```
 RenPyDeck/
+├── src/
+│   └── renpydeck/                  # the Python application package
+│       ├── __init__.py             #   package metadata (version)
+│       ├── __main__.py             #   enables `python -m renpydeck`
+│       └── app.py                  #   GTK 4 application + main window
+├── packaging/
+│   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
+│   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
+│   ├── sk.meluzina.RenPyDeck.desktop      # desktop entry
+│   ├── sk.meluzina.RenPyDeck.metainfo.xml # AppStream metadata
+│   └── sk.meluzina.RenPyDeck.svg          # application icon
 ├── download/   # Example download folder (downloaded game archives live here)
 ├── games/      # Example games folder (extracted/installed games live here)
 ├── plan.txt    # The original project plan
@@ -119,7 +131,79 @@ RenPyDeck/
 ```
 
 > Note: the Download and Games folders are **configurable** at runtime — the folders above
-> are just the bundled examples/defaults.
+> are just the bundled examples/defaults. They (and the generated `build/` and `dist/`
+> directories) are git-ignored.
+
+### Running the app without packaging
+
+For day-to-day development you can run straight from the source tree — no Flatpak build
+required. You need **Python 3**, **GTK 4**, and **PyGObject** installed on your system.
+
+```bash
+# Fedora / Steam Deck (SteamOS):
+sudo dnf install python3-gobject gtk4
+# Debian / Ubuntu:
+sudo apt install python3-gi gir1.2-gtk-4.0
+# Arch:
+sudo pacman -S python-gobject gtk4
+```
+
+Then launch the application from the project root in either of these equivalent ways:
+
+```bash
+# Option A — run the package as a module (recommended):
+PYTHONPATH=src python3 -m renpydeck
+
+# Option B — run the app module directly:
+PYTHONPATH=src python3 src/renpydeck/app.py
+```
+
+The `PYTHONPATH=src` part tells Python where to find the `renpydeck` package; without it
+the import will fail.
+
+### Packaging the app into a Flatpak
+
+The whole bundle is produced by a single script:
+
+```bash
+./packaging/build-flatpak.sh
+```
+
+This writes the single-file bundle to **`dist/RenPyDeck.flatpak`** — the one file you copy
+to the Steam Deck.
+
+**Prerequisites** (one-time): the matching GNOME **Platform** and **SDK**. The script builds
+with plain `flatpak` (no `flatpak-builder` needed):
+
+```bash
+flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49
+```
+
+Under the hood the script runs the standard `flatpak` build steps:
+
+```bash
+flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org.gnome.Platform 49
+# ... copy app files into build/flatpak-build/files ...
+flatpak build-finish build/flatpak-build --command=renpydeck \
+    --share=ipc --socket=wayland --socket=fallback-x11 --device=dri
+flatpak build-export build/flatpak-repo build/flatpak-build stable
+flatpak build-bundle build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
+```
+
+**Install and run the bundle** (locally to test, or on the Steam Deck after copying the file):
+
+```bash
+flatpak install --user RenPyDeck.flatpak
+flatpak run sk.meluzina.RenPyDeck
+```
+
+To uninstall it again:
+
+```bash
+flatpak uninstall --user sk.meluzina.RenPyDeck
+```
 
 ### Anatomy of a Ren'Py game
 
