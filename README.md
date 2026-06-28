@@ -98,6 +98,63 @@ close button.
 
 ---
 
+## Configuration
+
+RenPyDeck stores its settings in a plain **INI** file, following the XDG Base Directory
+specification:
+
+```
+$XDG_CONFIG_HOME/renpydeck/config.ini      # usually ~/.config/renpydeck/config.ini
+```
+
+When run as a Flatpak the same path is redirected into the app's private config directory,
+e.g. `~/.var/app/sk.meluzina.RenPyDeck/config/renpydeck/config.ini`.
+
+The file is created automatically on first launch with sensible defaults, and is rewritten
+whenever you change a folder in the configuration screen. It looks like this:
+
+```ini
+[folders]
+download = /home/deck/Downloads
+game = /home/deck/.local/share/renpydeck/games
+```
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `download` | Folder scanned for downloaded game archives. | Your desktop's standard **Downloads** folder (`XDG_DOWNLOAD_DIR`). |
+| `game` | Folder where games are extracted/installed. | `$XDG_DATA_HOME/renpydeck/games` (e.g. `~/.local/share/renpydeck/games`). |
+
+Both folders are created on startup if they don't already exist. You can edit the file by
+hand, but it's easier to use the in-app configuration screen.
+
+### Choosing folders outside the sandbox (Flatpak)
+
+The Flatpak ships with read-only access to your **Downloads** folder
+(`--filesystem=xdg-download:ro`), and the default game folder lives in the app's own
+always-writable data directory. With those defaults, no extra setup is needed.
+
+If you want to point RenPyDeck at a location **outside** the sandbox — for example games on
+a Steam Deck **SD card** (`/run/media/...`) or any other custom folder — the app needs
+permission to reach it. The folder picker can grant temporary access to a chosen folder via
+the desktop portal, but for a location RenPyDeck must read on every launch it's more reliable
+to grant a persistent permission. Either use **[Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal)**
+to add the folder, or run `flatpak override`, for example:
+
+```bash
+# Read-only access to a different download location (e.g. the SD card):
+flatpak override --user --filesystem=/run/media/deck:ro sk.meluzina.RenPyDeck
+
+# Read-write access to a custom game/install location:
+flatpak override --user --filesystem=/run/media/deck/Games sk.meluzina.RenPyDeck
+```
+
+Replace the paths to match where your folders actually are. To grant access to your whole
+home directory instead, use `--filesystem=home`. Remember the **download** location only
+needs read access (`:ro`), while the **game** location needs read-write so games can be
+installed and uninstalled there.
+
+---
+
 ## For developers
 
 ### Tech stack
@@ -187,7 +244,8 @@ Under the hood the script runs the standard `flatpak` build steps:
 flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org.gnome.Platform 49
 # ... copy app files into build/flatpak-build/files ...
 flatpak build-finish build/flatpak-build --command=renpydeck \
-    --share=ipc --socket=wayland --socket=fallback-x11 --device=dri
+    --share=ipc --socket=wayland --socket=fallback-x11 --device=dri \
+    --filesystem=xdg-download:ro
 flatpak build-export build/flatpak-repo build/flatpak-build stable
 flatpak build-bundle build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
 ```
