@@ -21,7 +21,12 @@ fixing up the file permissions Linux needs — so you can get straight to playin
   compressed formats Ren'Py games are distributed in.
 - **Configurable folder locations** for your downloads and your installed games.
 - **Steam Deck friendly** — includes an on-screen **Exit** button, because the Deck's
-  gaming mode hides window decorations (so there's no close button to rely on).
+  gaming mode hides window decorations (so there's no close button to rely on). The
+  close/minimise/maximise buttons GTK would draw into the header are hidden as well: Exit
+  already does the job, and they are awkward targets on a handheld.
+- **Always dark** — the colour scheme reaches an app through the desktop portal, which
+  gaming mode does not provide, so Flatpak apps start light there no matter how the desktop
+  is set. RenPyDeck asks for dark itself.
 - **One window, no dialogs** — questions, errors and even the folder browser are pages
   inside the main window. The Deck's gaming mode (the gamescope session) may never show a
   second window, and the system file picker it would need is unreachable there, so
@@ -89,15 +94,47 @@ The application scans both folders to build its two lists.
 
 ### Installing RenPyDeck
 
-RenPyDeck ships as a **single-file Flatpak bundle**. To install it on your Steam Deck (or any
-Linux machine):
+RenPyDeck ships as a **single-file Flatpak bundle** (`RenPyDeck.flatpak`). On any Linux
+machine it installs from a terminal:
 
 ```bash
 flatpak install RenPyDeck.flatpak
 ```
 
-Then launch it from your applications menu (in Desktop Mode), or add it to Steam as a
-non-Steam game to launch it from Gaming Mode.
+### Installing it on the Steam Deck
+
+No terminal needed — do this in **Desktop Mode**:
+
+1. Copy `RenPyDeck.flatpak` onto the Deck (USB stick, network share, `scp`, however you
+   like).
+2. **Double-click the file** in the file manager (Dolphin). **Discover** opens showing
+   RenPyDeck.
+3. Click **Install from local bundle**. Discover pulls in the GNOME runtime the first time,
+   which takes a few minutes; after that RenPyDeck appears in the application menu.
+
+To play from **Gaming Mode**, add it to your Steam library while still in Desktop Mode:
+
+4. In Steam, choose **Games → Add a Non-Steam Game to My Library…**. RenPyDeck is already in
+   the list of applications — the Flatpak installs a desktop entry, so there is nothing to
+   browse for. Tick it and confirm with **Add Selected Programs**.
+5. Switch to Gaming Mode. RenPyDeck is under **Non-Steam** in your library.
+
+#### Controller setup for Gaming Mode
+
+Gaming Mode gives a non-Steam app whatever controller layout it is configured with, and the
+default one has no mouse wheel — so the game list will not scroll. Before playing, select a
+layout that does:
+
+1. Launch RenPyDeck from your library, press the **STEAM** button and open
+   **Controller Settings**.
+2. Pick the **Web Browser** template (or any community layout meant for desktop apps). Its
+   left trackpad is already a scroll wheel, which is what the list needs.
+3. If you would rather adjust the layout by hand, choose **Edit Layout → Trackpads → Left
+   Trackpad → Scroll Wheel**, and use the cog beside *Scroll* to set the swipe direction to
+   **Vertical** if you prefer swiping over circular motion.
+
+The **touchscreen** works without any of this: drag the list to scroll it, flick it to send
+it gliding, and tap the buttons as usual.
 
 ### First run
 
@@ -108,8 +145,8 @@ non-Steam game to launch it from Gaming Mode.
 ### Using it on the Steam Deck
 
 Because the Steam Deck doesn't show window decorations by default, RenPyDeck includes an
-on-screen **Exit** button. Use it to close the application — you don't need a title bar's
-close button.
+on-screen **Exit** button. Use it to close the application — the usual
+close/minimise/maximise buttons are hidden, so Exit is how you leave.
 
 ---
 
