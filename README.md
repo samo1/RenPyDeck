@@ -22,6 +22,10 @@ fixing up the file permissions Linux needs — so you can get straight to playin
 - **Configurable folder locations** for your downloads and your installed games.
 - **Steam Deck friendly** — includes an on-screen **Exit** button, because the Deck's
   gaming mode hides window decorations (so there's no close button to rely on).
+- **One window, no dialogs** — questions, errors and even the folder browser are pages
+  inside the main window. The Deck's gaming mode (the gamescope session) may never show a
+  second window, and the system file picker it would need is unreachable there, so
+  RenPyDeck opens neither.
 - **Linux-first** — support is decided by what's *inside* the archive, not by its
   filename: a game is playable only if it ships a Linux launch script. Windows-only
   games are detected and ignored, even when a "linux"-named archive isn't one (and vice
@@ -144,10 +148,11 @@ directory. With those defaults, no extra setup is needed.
 
 If you want to point RenPyDeck at a location **outside** the sandbox — for example games on
 a Steam Deck **SD card** (`/run/media/...`) or any other custom folder — the app needs
-permission to reach it. The folder picker can grant temporary access to a chosen folder via
-the desktop portal, but for a location RenPyDeck must read on every launch it's more reliable
-to grant a persistent permission. Either use **[Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal)**
-to add the folder, or run `flatpak override`, for example:
+permission to reach it. RenPyDeck's folder browser is a plain view of the filesystem as the
+sandbox presents it: it cannot grant access to anything the sandbox hides, so a folder you
+have not allowed shows up empty or unreadable. Grant it a persistent permission instead —
+either use **[Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal)** to add the
+folder, or run `flatpak override`, for example:
 
 ```bash
 # Access to a different download location (e.g. the SD card):
@@ -170,8 +175,11 @@ location so an installed game's archive can be deleted.
 
 - **Language:** Python — a natural fit alongside the Ren'Py engine, which is itself
   Python-based.
-- **UI:** **GTK 4** via **PyGObject** (`gi`), presenting the downloaded and installed game
-  lists and the install / run / uninstall / exit actions.
+- **UI:** **GTK 4** + **libadwaita** via **PyGObject** (`gi`), presenting the game list and
+  the install / launch / remove / exit actions. Every screen is an `Adw.NavigationPage` in a
+  single `Adw.NavigationView` — no `Gtk.FileDialog`, no `Adw.AlertDialog`, no second
+  windows, because the Deck's gaming mode does not reliably show them (see the
+  Steam Deck note under Features).
 - **Packaging:** A single-file **Flatpak bundle** built on the **GNOME 49 runtime** (which
   already ships Python 3 + GTK 4 + PyGObject, so no extra dependencies are bundled).
 - **Unpacking:** zip and tar archives are handled by the Python standard library. Formats it
@@ -192,6 +200,7 @@ RenPyDeck/
 │       ├── __main__.py             #   enables `python -m renpydeck`
 │       ├── app.py                  #   GTK 4 application + main window
 │       ├── config.py               #   INI configuration (folder locations)
+│       ├── folderchooser.py        #   in-window folder browser (no portal)
 │       ├── games.py                #   scans both folders into the game list
 │       ├── installer.py            #   unpacking + permission fixing
 │       ├── launcher.py             #   running an installed game

@@ -9,9 +9,12 @@ game, *Remove* for either.
 Behind the library sits the **configuration screen** for choosing the two
 folders RenPyDeck works with — the *Download folder* (where downloaded game
 archives live) and the *Game folder* (where games are extracted/installed).
-The two screens share one window via an ``Adw.NavigationView``; the only popup
-is the system folder picker (``Gtk.FileDialog``), which routes through the XDG
-desktop portal when running inside the Flatpak sandbox.
+
+Everything lives in **one window**, as pages of an ``Adw.NavigationView``:
+screens, questions, errors and the folder browser alike. RenPyDeck opens no
+dialogs and no second windows at all, because in the Steam Deck's gaming mode
+(the gamescope session) a second window may never be shown — and the system
+folder picker, which needs the XDG desktop portal, would simply hang there.
 
 The Steam Deck's gaming mode hides window decorations, so the window carries its
 own in-window header bar with an **Exit** button — there is no titlebar close
@@ -36,6 +39,7 @@ from gi.repository import Gtk, Gio, Adw, GLib  # noqa: E402
 
 from . import __version__
 from .config import Config
+from .folderchooser import FolderChooserPage
 from .games import GameEntry, find_games
 from .installer import InstallError, install
 from .launcher import LaunchError, run
@@ -286,24 +290,25 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         if self.busy:
             return
 
-        dialog = Adw.AlertDialog(
+        self._push_message(
             heading=f"Remove {game.name}?",
             body=(
                 f"This permanently deletes "
                 f"{describe(game.archive, game.install_dir)}. "
                 f"There is no way back — the files do not go to the trash."
             ),
+            actions=[
+                ("Cancel", None, None),
+                (
+                    "Remove",
+                    "destructive-action",
+                    lambda: self._start_remove(button, game),
+                ),
+            ],
         )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("remove", "Remove")
-        dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("cancel")
-        dialog.set_close_response("cancel")
-        dialog.connect("response", self._on_remove_confirmed, button, game)
-        dialog.present(self)
 
-    def _on_remove_confirmed(self, _dialog, response, button, game: GameEntry):
-        if response != "remove" or self.busy:
+    def _start_remove(self, button, game: GameEntry):
+        if self.busy:
             return
 
         self._set_busy(True)
@@ -351,10 +356,52 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             for button in self.game_buttons:
                 button.set_sensitive(False)
 
+    # -- Messages and questions --------------------------------------------
+
     def _show_error(self, heading: str, body: str) -> None:
-        dialog = Adw.AlertDialog(heading=heading, body=body)
-        dialog.add_response("close", "Close")
-        dialog.present(self)
+        self._push_message(heading, body, actions=[("Close", None, None)])
+
+    def _push_message(self, heading: str, body: str, actions) -> None:
+        """Show a message — or a question — as a page inside the window.
+
+        Not a dialog: in the Steam Deck's gaming mode a second window is at the
+        mercy of the compositor, so everything RenPyDeck shows stays part of
+        the one window it already has.
+
+        *actions* is a list of ``(label, css_class, callback)``. Every button
+        returns to the previous page; a callback, if given, runs afterwards.
+        """
+        toolbar_view = Adw.ToolbarView()
+
+        header = Adw.HeaderBar()  # its back button is the same as Cancel/Close
+        exit_button = Gtk.Button(label="Exit")
+        exit_button.add_css_class("destructive-action")
+        exit_button.connect("clicked", self.on_exit_clicked)
+        header.pack_end(exit_button)
+        toolbar_view.add_top_bar(header)
+
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        buttons.set_halign(Gtk.Align.CENTER)
+        for label, css_class, callback in actions:
+            button = Gtk.Button(label=label)
+            if css_class:
+                button.add_css_class(css_class)
+            button.connect("clicked", self._on_message_action, callback)
+            buttons.append(button)
+
+        status = Adw.StatusPage(
+            title=GLib.markup_escape_text(heading),
+            description=GLib.markup_escape_text(body),
+            child=buttons,
+        )
+        toolbar_view.set_content(status)
+
+        self.navigation.push(Adw.NavigationPage(title=heading, child=toolbar_view))
+
+    def _on_message_action(self, _button, callback):
+        self.navigation.pop()
+        if callback is not None:
+            callback()
 
     # -- Configuration screen ----------------------------------------------
 
@@ -404,7 +451,10 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
     def _make_folder_row(self, title, subtitle, on_choose):
         """Build an Adw.ActionRow showing a folder path plus a Choose button."""
         row = Adw.ActionRow(title=title, subtitle=subtitle)
-        row.set_subtitle_selectable(True)
+        # Not selectable: selectable text carries a context menu, and GTK puts
+        # that in a popover — another surface the Deck's gaming mode may not
+        # show. The path is only there to be read.
+        row.set_subtitle_lines(0)
 
         button = Gtk.Button(label="Choose…")
         button.set_valign(Gtk.Align.CENTER)
@@ -431,23 +481,24 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         )
 
     def _choose_folder(self, title, current_path, on_selected):
-        """Open the system folder picker (a portal-backed popup when sandboxed)."""
-        dialog = Gtk.FileDialog()
-        dialog.set_title(title)
-        dialog.set_modal(True)
-        if current_path:
-            dialog.set_initial_folder(Gio.File.new_for_path(current_path))
+        """Browse for a folder on a page of our own.
 
-        dialog.select_folder(self, None, self._on_folder_chosen, on_selected)
+        The system picker (``Gtk.FileDialog``) is deliberately not used: it
+        needs the XDG desktop portal, which the Steam Deck's gaming mode does
+        not provide, and a portal request that never answers leaves the window
+        looking frozen.
+        """
+        page = FolderChooserPage(
+            title=title,
+            start_path=current_path,
+            on_selected=lambda path: self._on_folder_chosen(path, on_selected),
+            on_exit=self.on_exit_clicked,
+        )
+        self.navigation.push(page)
 
-    def _on_folder_chosen(self, dialog, result, on_selected):
-        try:
-            folder = dialog.select_folder_finish(result)
-        except GLib.Error:
-            # The user cancelled, or the portal denied the request.
-            return
-        if folder is not None:
-            on_selected(folder.get_path())
+    def _on_folder_chosen(self, path, on_selected):
+        self.navigation.pop()
+        on_selected(path)
 
     def _set_download_dir(self, path):
         self.config.download_dir = path
