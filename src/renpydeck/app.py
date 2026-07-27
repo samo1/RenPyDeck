@@ -2,8 +2,9 @@
 
 The window opens on the **library** — a single alphabetically sorted list of
 every game RenPyDeck can see, whether it is still a downloaded archive or an
-already extracted (installed) game. Each entry offers *Install*, *Launch* and
-*Remove*; a button is enabled only when it makes sense for that entry's state.
+already extracted (installed) game. Each entry shows only the actions that
+apply to it: *Install* for a downloaded archive, *Launch* for an installed
+game, *Remove* for either.
 
 Behind the library sits the **configuration screen** for choosing the two
 folders RenPyDeck works with — the *Download folder* (where downloaded game
@@ -134,7 +135,12 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         )
 
     def _make_game_row(self, game: GameEntry) -> Adw.ActionRow:
-        """Build one list row: the game's name plus its three action buttons."""
+        """Build one list row: the game's name plus the actions it allows.
+
+        Only the applicable actions get a button — Install for a downloaded
+        archive, Launch for an installed game — so a row never shows a control
+        that cannot be used.
+        """
         row = Adw.ActionRow(title=game.name, subtitle=self._describe(game))
         row.set_use_markup(False)  # names are plain text, not Pango markup
         row.set_title_lines(0)  # wrap long archive names instead of clipping
@@ -142,24 +148,25 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         buttons.set_valign(Gtk.Align.CENTER)
 
-        install = Gtk.Button(label="Install")
-        install.set_sensitive(game.is_downloaded)
-        install.connect("clicked", self.on_install_clicked, game)
-        buttons.append(install)
+        if game.is_downloaded:
+            install = Gtk.Button(label="Install")
+            install.connect("clicked", self.on_install_clicked, game)
+            buttons.append(install)
+            self.game_buttons.append(install)
 
         # Launch and Remove land in later milestones; for now the buttons only
         # show which operations apply to this entry.
-        launch = Gtk.Button(label="Launch")
-        launch.add_css_class("suggested-action")
-        launch.set_sensitive(game.is_installed)
-        buttons.append(launch)
+        if game.is_installed:
+            launch = Gtk.Button(label="Launch")
+            launch.add_css_class("suggested-action")
+            buttons.append(launch)
+            self.game_buttons.append(launch)
 
+        # Remove applies either way: an entry is downloaded, installed or both.
         remove = Gtk.Button(label="Remove")
         remove.add_css_class("destructive-action")
-        remove.set_sensitive(game.is_downloaded or game.is_installed)
         buttons.append(remove)
-
-        self.game_buttons += [install, launch, remove]
+        self.game_buttons.append(remove)
 
         row.add_suffix(buttons)
         return row
