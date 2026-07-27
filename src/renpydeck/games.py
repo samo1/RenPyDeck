@@ -10,8 +10,14 @@ Two folders make up the library (see :mod:`renpydeck.config`):
 Both are scanned and merged into a single, alphabetically sorted list of
 :class:`GameEntry` objects. A game that has been installed *and* still has its
 archive around shows up once, as a single entry that knows about both paths.
+
+This module also locates the **game root** inside an extracted game — the
+folder holding the ``renpy`` engine folder and the ``*.sh`` launch script next
+to it. Both installing (which refuses anything without that pair) and launching
+(which runs the script) need it.
 """
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -107,6 +113,47 @@ def find_installed(game_dir: str) -> list[GameEntry]:
             continue
         entries.append(GameEntry(name=path.name, install_dir=path))
     return entries
+
+
+def find_engine_dirs(root: Path) -> list[Path]:
+    """Folders under *root* that contain a ``renpy`` sub-folder.
+
+    Every Ren'Py game ships the engine, so this is what marks a game root —
+    searched for at any depth, because archives wrap the game in a folder (or
+    two) inconsistently. Older games carry further ``renpy`` folders deep
+    inside ``lib/.../python2.7/``; those come later in the list and have no
+    launch script beside them.
+    """
+    engine_dirs = []
+    for dirpath, dirnames, _filenames in os.walk(root):
+        for name in dirnames:
+            if name.lower() == "renpy":
+                engine_dirs.append(Path(dirpath))
+    return engine_dirs
+
+
+def find_launch_script(root: Path) -> Path | None:
+    """The Linux launch script of the game under *root*, if it has one.
+
+    The script is the ``*.sh`` file sitting next to the ``renpy`` folder; its
+    parent folder is the game root the script must be run from. A game without
+    one is a Windows-only release the Steam Deck cannot run.
+    """
+    for directory in find_engine_dirs(root):
+        scripts = sorted(
+            path
+            for path in directory.iterdir()
+            if path.is_file() and path.suffix.lower() == ".sh"
+        )
+        if not scripts:
+            continue
+        # Ren'Py names the launcher after the game and puts <Game>.py beside
+        # it; prefer that pair when a game ships extra shell scripts.
+        for script in scripts:
+            if script.with_suffix(".py").is_file():
+                return script
+        return scripts[0]
+    return None
 
 
 def find_games(download_dir: str, game_dir: str) -> list[GameEntry]:

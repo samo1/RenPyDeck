@@ -66,7 +66,10 @@ The application scans both folders to build its two lists.
      **`renpy` folder** (the engine — every Ren'Py game ships it) with a **`*.sh` launch
      script beside it** (the Linux launcher). If either is missing the install is refused,
      nothing is added to the Games folder, and the archive is kept.
-3. **Play** — Select an installed game and choose **Run** to launch it.
+3. **Play** — Choose **Launch** on an installed game. RenPyDeck runs the game's `*.sh`
+   script from the game root — the folder holding `renpy` — with that folder as the working
+   directory, which is what the script expects. The game takes over in its own window;
+   RenPyDeck waits behind it with its buttons disabled, so only one game runs at a time.
 4. **Uninstall** — Select an installed game and choose **Uninstall** to remove its extracted
    files from the Games folder.
 
@@ -187,7 +190,8 @@ RenPyDeck/
 │       ├── app.py                  #   GTK 4 application + main window
 │       ├── config.py               #   INI configuration (folder locations)
 │       ├── games.py                #   scans both folders into the game list
-│       └── installer.py            #   unpacking + permission fixing
+│       ├── installer.py            #   unpacking + permission fixing
+│       └── launcher.py             #   running an installed game
 ├── packaging/
 │   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
@@ -343,6 +347,11 @@ A few important real-world variations the installer must tolerate:
   there to retry with. Because the checks run on the unpacked tree, an unsupported archive
   is unpacked first and then discarded; this keeps one code path for every archive format,
   at the cost of some temporary disk space.
+- **One game at a time:** Launching runs the game as a child process and waits for it,
+  which is what keeps a second game from being started. A game installed by hand (not
+  through RenPyDeck) that never had its permissions fixed gets them fixed on the spot rather
+  than failing to start. If the game exits with a non-zero status, RenPyDeck says so — the
+  game's own output goes to the terminal RenPyDeck was started from.
 - **Archives are consumed:** A successful install hard-deletes the archive from the Download
   folder (no trash). Uninstalling later removes the extracted files from the Games folder;
   reinstalling means downloading the game again.

@@ -30,7 +30,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from .games import archive_stem
+from .games import archive_stem, find_engine_dirs, find_launch_script
 
 #: Extensions handled in-process by the standard library.
 _ZIP_SUFFIXES = (".zip",)
@@ -209,37 +209,26 @@ def _clear(directory: Path) -> None:
 def find_game_root(root: Path, archive_name: str = "the archive") -> Path:
     """Return the game's root folder inside *root*, or raise `InstallError`.
 
-    The game root is the folder that holds both:
-
-    * a ``renpy`` folder — every Ren'Py game ships the engine, so its absence
-      means this is not a Ren'Py game at all; and
-    * a ``*.sh`` launch script sitting right next to it — the Linux launcher.
-      A Windows-only release has the ``renpy`` folder but no script.
-
-    The pair is searched for rather than expected at the top, because some
-    archives wrap the game in one or more folders and some do not.
+    The game root is the folder that holds both a ``renpy`` folder — every
+    Ren'Py game ships the engine, so its absence means this is not a Ren'Py
+    game at all — and a ``*.sh`` launch script right next to it. A Windows-only
+    release has the engine folder but no script. See
+    :func:`renpydeck.games.find_launch_script`, which does the searching.
     """
-    engine_dirs = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        for name in dirnames:
-            if name.lower() == "renpy":
-                engine_dirs.append((Path(dirpath), filenames))
-
-    if not engine_dirs:
+    if not find_engine_dirs(root):
         raise InstallError(
             f"{archive_name} does not contain a “renpy” folder, so it is not a "
             f"Ren'Py game RenPyDeck can install."
         )
 
-    for directory, filenames in engine_dirs:
-        if any(name.lower().endswith(".sh") for name in filenames):
-            return directory
-
-    raise InstallError(
-        f"{archive_name} has no Linux launch script (a “.sh” file) next to its "
-        f"“renpy” folder — it looks like a Windows-only release, which the "
-        f"Steam Deck cannot run."
-    )
+    script = find_launch_script(root)
+    if script is None:
+        raise InstallError(
+            f"{archive_name} has no Linux launch script (a “.sh” file) next to "
+            f"its “renpy” folder — it looks like a Windows-only release, which "
+            f"the Steam Deck cannot run."
+        )
+    return script.parent
 
 
 # -- Post-processing ------------------------------------------------------

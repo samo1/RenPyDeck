@@ -18,8 +18,10 @@ own in-window header bar with an **Exit** button — there is no titlebar close
 button to rely on.
 
 *Install* unpacks an archive into the game folder (see
-:mod:`renpydeck.installer`); it runs on a worker thread so a big archive does
-not freeze the window. *Launch* and *Remove* land in later milestones and are
+:mod:`renpydeck.installer`) and *Launch* runs an installed game (see
+:mod:`renpydeck.launcher`). Both work on a worker thread, with the library's
+buttons disabled until they finish — so a big archive never freezes the window,
+and only one game runs at a time. *Remove* lands in a later milestone and is
 inert for now.
 """
 
@@ -36,6 +38,7 @@ from . import __version__
 from .config import Config
 from .games import GameEntry, find_games
 from .installer import InstallError, install
+from .launcher import LaunchError, run
 
 APP_ID = "sk.meluzina.RenPyDeck"
 
@@ -154,15 +157,16 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             buttons.append(install)
             self.game_buttons.append(install)
 
-        # Launch and Remove land in later milestones; for now the buttons only
-        # show which operations apply to this entry.
         if game.is_installed:
             launch = Gtk.Button(label="Launch")
             launch.add_css_class("suggested-action")
+            launch.connect("clicked", self.on_launch_clicked, game)
             buttons.append(launch)
             self.game_buttons.append(launch)
 
-        # Remove applies either way: an entry is downloaded, installed or both.
+        # Remove lands in a later milestone; its button only shows that the
+        # action applies to this entry. It applies either way: an entry is
+        # downloaded, installed or both.
         remove = Gtk.Button(label="Remove")
         remove.add_css_class("destructive-action")
         buttons.append(remove)
@@ -220,6 +224,59 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             self._show_error("Install failed", error)
         else:
             self.toasts.add_toast(Adw.Toast(title=f"Installed {installed.name}"))
+        return GLib.SOURCE_REMOVE
+
+    # -- Launching ---------------------------------------------------------
+
+    def on_launch_clicked(self, button, game: GameEntry):
+        """Run an installed game, waiting for it on a worker thread.
+
+        The game opens its own window and RenPyDeck stays put behind it with
+        everything disabled, so only one game can be running at a time.
+        """
+        if self.busy or not game.is_installed:
+            return
+
+        self._set_busy(True)
+        button.set_label("Running…")
+
+        thread = threading.Thread(
+            target=self._launch_worker,
+            args=(game.install_dir,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _launch_worker(self, install_dir):
+        """Runs on a worker thread — must not touch any widget directly."""
+        try:
+            status = run(install_dir)
+        except LaunchError as error:
+            GLib.idle_add(self._on_launch_finished, install_dir, None, str(error))
+        except Exception as error:  # unexpected, but must not kill the thread
+            GLib.idle_add(
+                self._on_launch_finished,
+                install_dir,
+                None,
+                f"Unexpected error while running {install_dir.name}: {error}",
+            )
+        else:
+            GLib.idle_add(self._on_launch_finished, install_dir, status, None)
+
+    def _on_launch_finished(self, install_dir, status, error):
+        """Back on the main thread: the game window has closed."""
+        self._set_busy(False)
+        self.refresh_library()  # the game may have been removed meanwhile
+
+        if error is not None:
+            self._show_error("Could not run the game", error)
+        elif status != 0:
+            self._show_error(
+                "The game stopped unexpectedly",
+                f"{install_dir.name} exited with status {status}. Its own "
+                f"output, in the terminal RenPyDeck was started from, usually "
+                f"says why.",
+            )
         return GLib.SOURCE_REMOVE
 
     def _set_busy(self, busy: bool) -> None:
