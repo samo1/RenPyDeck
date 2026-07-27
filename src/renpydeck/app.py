@@ -83,7 +83,7 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         """Build the game list screen shown on launch."""
         toolbar_view = Adw.ToolbarView()
 
-        header = Adw.HeaderBar()
+        header = self._make_header()
 
         self.settings_button = Gtk.Button(label="Settings")
         self.settings_button.connect("clicked", self.on_settings_clicked)
@@ -92,11 +92,6 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         self.refresh_button = Gtk.Button(label="Refresh")
         self.refresh_button.connect("clicked", lambda _button: self.refresh_library())
         header.pack_start(self.refresh_button)
-
-        exit_button = Gtk.Button(label="Exit")
-        exit_button.add_css_class("destructive-action")
-        exit_button.connect("clicked", self.on_exit_clicked)
-        header.pack_end(exit_button)
 
         toolbar_view.add_top_bar(header)
 
@@ -375,12 +370,8 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         """
         toolbar_view = Adw.ToolbarView()
 
-        header = Adw.HeaderBar()  # its back button is the same as Cancel/Close
-        exit_button = Gtk.Button(label="Exit")
-        exit_button.add_css_class("destructive-action")
-        exit_button.connect("clicked", self.on_exit_clicked)
-        header.pack_end(exit_button)
-        toolbar_view.add_top_bar(header)
+        # Its back button is the same as Cancel/Close.
+        toolbar_view.add_top_bar(self._make_header())
 
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         buttons.set_halign(Gtk.Align.CENTER)
@@ -410,12 +401,8 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
     def _build_settings_page(self) -> Adw.NavigationPage:
         toolbar_view = Adw.ToolbarView()
 
-        header = Adw.HeaderBar()  # shows a back button inside a NavigationView
-        exit_button = Gtk.Button(label="Exit")
-        exit_button.add_css_class("destructive-action")
-        exit_button.connect("clicked", self.on_exit_clicked)
-        header.pack_end(exit_button)
-        toolbar_view.add_top_bar(header)
+        # Shows a back button inside a NavigationView.
+        toolbar_view.add_top_bar(self._make_header())
 
         page = Adw.PreferencesPage()
         toolbar_view.set_content(page)
@@ -449,6 +436,24 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         self.navigation.push(self.settings_page)
 
     # -- UI construction helpers ------------------------------------------
+
+    def _make_header(self) -> Adw.HeaderBar:
+        """A header bar with the Exit button and no window controls.
+
+        The close/minimise/maximise buttons are GTK's own, drawn into the
+        header. They are hidden because the Exit button already closes
+        RenPyDeck, and on the Steam Deck those small targets are of no use.
+        The navigation back button is a separate thing and stays.
+        """
+        header = Adw.HeaderBar()
+        header.set_show_start_title_buttons(False)
+        header.set_show_end_title_buttons(False)
+
+        exit_button = Gtk.Button(label="Exit")
+        exit_button.add_css_class("destructive-action")
+        exit_button.connect("clicked", self.on_exit_clicked)
+        header.pack_end(exit_button)
+        return header
 
     def _make_folder_row(self, title, subtitle, on_choose):
         """Build an Adw.ActionRow showing a folder path plus a Choose button."""
@@ -531,6 +536,14 @@ class RenPyDeckApplication(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+
+        # Always dark. The system's colour scheme reaches an app through the
+        # desktop portal, which the Deck's gaming mode does not provide, so
+        # every Flatpak app starts light there however the desktop is set.
+        # (Adw.ColorScheme.PREFER_DARK instead would still follow a desktop
+        # that explicitly asks for light.)
+        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+
         # Load (and, on first run, create with defaults) the configuration,
         # then make sure the configured folders actually exist on disk.
         self.config = Config.load()

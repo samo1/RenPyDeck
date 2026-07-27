@@ -38,6 +38,9 @@ class FolderChooserPage(Adw.NavigationPage):
         self.set_child(toolbar_view)
 
         header = Adw.HeaderBar()  # its back button cancels the choice
+        # No close/minimise/maximise buttons here either — Exit is enough.
+        header.set_show_start_title_buttons(False)
+        header.set_show_end_title_buttons(False)
 
         self.up_button = Gtk.Button(label="Up")
         self.up_button.connect("clicked", self.on_up_clicked)
