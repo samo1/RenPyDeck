@@ -15,7 +15,8 @@ fixing up the file permissions Linux needs — so you can get straight to playin
   ready to install) and games you've **installed** (extracted, ready to play).
 - **One-click install** — unpacks a downloaded archive into your games folder.
 - **One-click launch** — runs an installed game.
-- **One-click uninstall** — removes an installed game's files.
+- **One-click removal** — deletes a game's files (and its archive, if it still has one)
+  after a confirmation prompt.
 - **Many archive formats** — handles `.zip`, `.tar.bz2`, `.rar`, and other common
   compressed formats Ren'Py games are distributed in.
 - **Configurable folder locations** for your downloads and your installed games.
@@ -70,8 +71,10 @@ The application scans both folders to build its two lists.
    script from the game root — the folder holding `renpy` — with that folder as the working
    directory, which is what the script expects. The game takes over in its own window;
    RenPyDeck waits behind it with its buttons disabled, so only one game runs at a time.
-4. **Uninstall** — Select an installed game and choose **Uninstall** to remove its extracted
-   files from the Games folder.
+4. **Remove** — Choose **Remove** to delete a game from the library. RenPyDeck asks for
+   confirmation first, naming exactly what will go, and then deletes whatever the entry
+   consists of: the extracted game, its archive, or both. This is a hard delete — nothing
+   goes to the trash and nothing can be undone.
 
 ---
 
@@ -93,7 +96,7 @@ non-Steam game to launch it from Gaming Mode.
 
 1. Open **Settings** and set your **Download folder** and **Games folder** locations.
 2. Put your game archives into the Download folder.
-3. Use the interface to **install**, **run**, and **uninstall** games.
+3. Use the interface to **install**, **launch**, and **remove** games.
 
 ### Using it on the Steam Deck
 
@@ -191,7 +194,8 @@ RenPyDeck/
 │       ├── config.py               #   INI configuration (folder locations)
 │       ├── games.py                #   scans both folders into the game list
 │       ├── installer.py            #   unpacking + permission fixing
-│       └── launcher.py             #   running an installed game
+│       ├── launcher.py             #   running an installed game
+│       └── remover.py              #   deleting a game's files
 ├── packaging/
 │   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
@@ -353,8 +357,11 @@ A few important real-world variations the installer must tolerate:
   than failing to start. If the game exits with a non-zero status, RenPyDeck says so — the
   game's own output goes to the terminal RenPyDeck was started from.
 - **Archives are consumed:** A successful install hard-deletes the archive from the Download
-  folder (no trash). Uninstalling later removes the extracted files from the Games folder;
-  reinstalling means downloading the game again.
+  folder (no trash). Removing the game later deletes its extracted files the same way;
+  playing it again means downloading it again.
+- **Removal is confirmed, then final:** Remove always asks first, naming the game folder and
+  the archive it is about to delete. Confirming deletes both if both are present — nothing
+  goes to the trash, and anything already gone counts as removed rather than an error.
 
 ### Bundled examples
 

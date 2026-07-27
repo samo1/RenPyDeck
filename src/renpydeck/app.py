@@ -18,11 +18,11 @@ own in-window header bar with an **Exit** button — there is no titlebar close
 button to rely on.
 
 *Install* unpacks an archive into the game folder (see
-:mod:`renpydeck.installer`) and *Launch* runs an installed game (see
-:mod:`renpydeck.launcher`). Both work on a worker thread, with the library's
-buttons disabled until they finish — so a big archive never freezes the window,
-and only one game runs at a time. *Remove* lands in a later milestone and is
-inert for now.
+:mod:`renpydeck.installer`), *Launch* runs an installed game (see
+:mod:`renpydeck.launcher`) and *Remove* deletes it for good (see
+:mod:`renpydeck.remover`), after asking. All three work on a worker thread with
+the library's buttons disabled until they finish — so a big archive never
+freezes the window, and only one game runs at a time.
 """
 
 import threading
@@ -39,6 +39,7 @@ from .config import Config
 from .games import GameEntry, find_games
 from .installer import InstallError, install
 from .launcher import LaunchError, run
+from .remover import RemoveError, describe, remove
 
 APP_ID = "sk.meluzina.RenPyDeck"
 
@@ -164,11 +165,10 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             buttons.append(launch)
             self.game_buttons.append(launch)
 
-        # Remove lands in a later milestone; its button only shows that the
-        # action applies to this entry. It applies either way: an entry is
-        # downloaded, installed or both.
+        # Remove applies either way: an entry is downloaded, installed or both.
         remove = Gtk.Button(label="Remove")
         remove.add_css_class("destructive-action")
+        remove.connect("clicked", self.on_remove_clicked, game)
         buttons.append(remove)
         self.game_buttons.append(remove)
 
@@ -277,6 +277,69 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
                 f"output, in the terminal RenPyDeck was started from, usually "
                 f"says why.",
             )
+        return GLib.SOURCE_REMOVE
+
+    # -- Removing ----------------------------------------------------------
+
+    def on_remove_clicked(self, button, game: GameEntry):
+        """Ask first, then delete the game's files for good."""
+        if self.busy:
+            return
+
+        dialog = Adw.AlertDialog(
+            heading=f"Remove {game.name}?",
+            body=(
+                f"This permanently deletes "
+                f"{describe(game.archive, game.install_dir)}. "
+                f"There is no way back — the files do not go to the trash."
+            ),
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("remove", "Remove")
+        dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_remove_confirmed, button, game)
+        dialog.present(self)
+
+    def _on_remove_confirmed(self, _dialog, response, button, game: GameEntry):
+        if response != "remove" or self.busy:
+            return
+
+        self._set_busy(True)
+        button.set_label("Removing…")
+
+        thread = threading.Thread(
+            target=self._remove_worker,
+            args=(game,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _remove_worker(self, game: GameEntry):
+        """Runs on a worker thread — must not touch any widget directly."""
+        try:
+            remove(archive=game.archive, install_dir=game.install_dir)
+        except RemoveError as error:
+            GLib.idle_add(self._on_remove_finished, game.name, str(error))
+        except Exception as error:  # unexpected, but must not kill the thread
+            GLib.idle_add(
+                self._on_remove_finished,
+                game.name,
+                f"Unexpected error while removing {game.name}: {error}",
+            )
+        else:
+            GLib.idle_add(self._on_remove_finished, game.name, None)
+
+    def _on_remove_finished(self, name, error):
+        """Back on the main thread: report the result and rescan the folders."""
+        self._set_busy(False)
+        self.refresh_library()
+
+        if error is not None:
+            self._show_error("Remove failed", error)
+        else:
+            self.toasts.add_toast(Adw.Toast(title=f"Removed {name}"))
         return GLib.SOURCE_REMOVE
 
     def _set_busy(self, busy: bool) -> None:
