@@ -16,9 +16,13 @@ The Steam Deck's gaming mode hides window decorations, so the window carries its
 own in-window header bar with an **Exit** button — there is no titlebar close
 button to rely on.
 
-Later milestones will put the install / launch / remove functionality described
-in the README behind the per-game buttons, which are inert for now.
+*Install* unpacks an archive into the game folder (see
+:mod:`renpydeck.installer`); it runs on a worker thread so a big archive does
+not freeze the window. *Launch* and *Remove* land in later milestones and are
+inert for now.
 """
+
+import threading
 
 import gi
 
@@ -30,6 +34,7 @@ from gi.repository import Gtk, Gio, Adw, GLib  # noqa: E402
 from . import __version__
 from .config import Config
 from .games import GameEntry, find_games
+from .installer import InstallError, install
 
 APP_ID = "sk.meluzina.RenPyDeck"
 
@@ -41,6 +46,10 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         super().__init__(**kwargs)
 
         self.config = config
+        # Set while an install runs on a worker thread; the library's buttons
+        # stay disabled until it finishes, so only one runs at a time.
+        self.busy = False
+        self.game_buttons: list[Gtk.Button] = []
 
         self.set_title("RenPyDeck")
         self.set_default_size(800, 480)  # matches the Steam Deck's screen ratio
@@ -66,13 +75,13 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
 
         header = Adw.HeaderBar()
 
-        settings_button = Gtk.Button(label="Settings")
-        settings_button.connect("clicked", self.on_settings_clicked)
-        header.pack_start(settings_button)
+        self.settings_button = Gtk.Button(label="Settings")
+        self.settings_button.connect("clicked", self.on_settings_clicked)
+        header.pack_start(self.settings_button)
 
-        refresh_button = Gtk.Button(label="Refresh")
-        refresh_button.connect("clicked", lambda _button: self.refresh_library())
-        header.pack_start(refresh_button)
+        self.refresh_button = Gtk.Button(label="Refresh")
+        self.refresh_button.connect("clicked", lambda _button: self.refresh_library())
+        header.pack_start(self.refresh_button)
 
         exit_button = Gtk.Button(label="Exit")
         exit_button.add_css_class("destructive-action")
@@ -87,7 +96,9 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         self.library_scroller.set_policy(
             Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
         )
-        toolbar_view.set_content(self.library_scroller)
+        # Toasts report how an install went without covering the list.
+        self.toasts = Adw.ToastOverlay(child=self.library_scroller)
+        toolbar_view.set_content(self.toasts)
 
         return Adw.NavigationPage(title="RenPyDeck", child=toolbar_view)
 
@@ -100,6 +111,7 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             self.library_scroller.set_child(self._build_empty_state())
 
     def _build_game_list(self, games: list[GameEntry]) -> Gtk.Widget:
+        self.game_buttons = []
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
         for game in games:
@@ -130,12 +142,13 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         buttons.set_valign(Gtk.Align.CENTER)
 
-        # The actions themselves land in a later milestone; for now the buttons
-        # only show which operations apply to this entry.
         install = Gtk.Button(label="Install")
         install.set_sensitive(game.is_downloaded)
+        install.connect("clicked", self.on_install_clicked, game)
         buttons.append(install)
 
+        # Launch and Remove land in later milestones; for now the buttons only
+        # show which operations apply to this entry.
         launch = Gtk.Button(label="Launch")
         launch.add_css_class("suggested-action")
         launch.set_sensitive(game.is_installed)
@@ -145,6 +158,8 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         remove.add_css_class("destructive-action")
         remove.set_sensitive(game.is_downloaded or game.is_installed)
         buttons.append(remove)
+
+        self.game_buttons += [install, launch, remove]
 
         row.add_suffix(buttons)
         return row
@@ -156,6 +171,63 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         if game.is_installed:
             return "Installed"
         return "Downloaded — not installed yet"
+
+    # -- Installing --------------------------------------------------------
+
+    def on_install_clicked(self, button, game: GameEntry):
+        """Unpack a downloaded game into the game folder, off the main thread."""
+        if self.busy or not game.is_downloaded:
+            return
+
+        self._set_busy(True)
+        button.set_label("Installing…")
+
+        thread = threading.Thread(
+            target=self._install_worker,
+            args=(game.archive,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _install_worker(self, archive):
+        """Runs on a worker thread — must not touch any widget directly."""
+        try:
+            installed = install(archive, self.config.game_dir)
+        except InstallError as error:
+            GLib.idle_add(self._on_install_finished, None, str(error))
+        except Exception as error:  # unexpected, but must not kill the thread
+            GLib.idle_add(
+                self._on_install_finished,
+                None,
+                f"Unexpected error while installing {archive.name}: {error}",
+            )
+        else:
+            GLib.idle_add(self._on_install_finished, installed, None)
+
+    def _on_install_finished(self, installed, error):
+        """Back on the main thread: report the result and rescan the folders."""
+        self._set_busy(False)
+        self.refresh_library()  # rebuilds the rows with fresh, enabled buttons
+
+        if error is not None:
+            self._show_error("Install failed", error)
+        else:
+            self.toasts.add_toast(Adw.Toast(title=f"Installed {installed.name}"))
+        return GLib.SOURCE_REMOVE
+
+    def _set_busy(self, busy: bool) -> None:
+        """Lock (or unlock) the actions that must not overlap an install."""
+        self.busy = busy
+        self.refresh_button.set_sensitive(not busy)
+        self.settings_button.set_sensitive(not busy)
+        if busy:
+            for button in self.game_buttons:
+                button.set_sensitive(False)
+
+    def _show_error(self, heading: str, body: str) -> None:
+        dialog = Adw.AlertDialog(heading=heading, body=body)
+        dialog.add_response("close", "Close")
+        dialog.present(self)
 
     # -- Configuration screen ----------------------------------------------
 

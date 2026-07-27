@@ -56,17 +56,19 @@ The application scans both folders to build its two lists.
    - The game is always placed in its **own subfolder** (named after the archive), so loose
      files never spill into your Games folder. This holds whether the archive contains its
      files at the top level *or* already wraps them in its own folder.
-   - RenPyDeck then locates the game's **Linux launch script** (`*.sh`) — even if it sits a
-     folder or two down inside the archive, and even if folders or files contain spaces.
-   - After extraction, RenPyDeck **fixes executable permissions** on that launch script and
-     on the Linux runtime in the game's `lib` folder, so it can actually start.
-   - Support is decided by **content, not filename**. Only games that include a Linux launch
-     script are installed; Windows-only games are ignored — regardless of whether the archive
-     is named `-win`, `-pc`, `-linux`, or anything else.
+   - After extraction, RenPyDeck **fixes executable permissions**: every `*.sh` launch
+     script in the game — wherever it sits in the tree — and everything inside the game's
+     `lib` folder, which is searched for rather than assumed to be at the top.
+   - Once the game is unpacked, its **archive is deleted** from the Download folder. This is
+     a hard delete: the file does not go to the trash.
+   - Support is decided by **content, not filename**, regardless of whether the archive is
+     named `-win`, `-pc`, `-linux` or anything else. What was unpacked must contain a
+     **`renpy` folder** (the engine — every Ren'Py game ships it) with a **`*.sh` launch
+     script beside it** (the Linux launcher). If either is missing the install is refused,
+     nothing is added to the Games folder, and the archive is kept.
 3. **Play** — Select an installed game and choose **Run** to launch it.
 4. **Uninstall** — Select an installed game and choose **Uninstall** to remove its extracted
-   files from the Games folder. The original archive stays in your Download folder, so you
-   can reinstall later.
+   files from the Games folder.
 
 ---
 
@@ -129,9 +131,10 @@ hand, but it's easier to use the in-app configuration screen.
 
 ### Choosing folders outside the sandbox (Flatpak)
 
-The Flatpak ships with read-only access to your **Downloads** folder
-(`--filesystem=xdg-download:ro`), and the default game folder lives in the app's own
-always-writable data directory. With those defaults, no extra setup is needed.
+The Flatpak ships with read-write access to your **Downloads** folder
+(`--filesystem=xdg-download`) — write access is needed because installing a game deletes
+its archive — and the default game folder lives in the app's own always-writable data
+directory. With those defaults, no extra setup is needed.
 
 If you want to point RenPyDeck at a location **outside** the sandbox — for example games on
 a Steam Deck **SD card** (`/run/media/...`) or any other custom folder — the app needs
@@ -141,17 +144,17 @@ to grant a persistent permission. Either use **[Flatseal](https://flathub.org/ap
 to add the folder, or run `flatpak override`, for example:
 
 ```bash
-# Read-only access to a different download location (e.g. the SD card):
-flatpak override --user --filesystem=/run/media/deck:ro sk.meluzina.RenPyDeck
+# Access to a different download location (e.g. the SD card):
+flatpak override --user --filesystem=/run/media/deck sk.meluzina.RenPyDeck
 
-# Read-write access to a custom game/install location:
+# Access to a custom game/install location:
 flatpak override --user --filesystem=/run/media/deck/Games sk.meluzina.RenPyDeck
 ```
 
 Replace the paths to match where your folders actually are. To grant access to your whole
-home directory instead, use `--filesystem=home`. Remember the **download** location only
-needs read access (`:ro`), while the **game** location needs read-write so games can be
-installed and uninstalled there.
+home directory instead, use `--filesystem=home`. Both locations need read-write access: the
+**game** location so games can be installed and uninstalled there, and the **download**
+location so an installed game's archive can be deleted.
 
 ---
 
@@ -165,6 +168,13 @@ installed and uninstalled there.
   lists and the install / run / uninstall / exit actions.
 - **Packaging:** A single-file **Flatpak bundle** built on the **GNOME 49 runtime** (which
   already ships Python 3 + GTK 4 + PyGObject, so no extra dependencies are bundled).
+- **Unpacking:** zip and tar archives are handled by the Python standard library. Formats it
+  cannot read (`.rar`, `.7z`) are passed to external extractors — **`bsdtar`** (part of the
+  GNOME runtime, and able to read both), then `7z`/`7zz`/`7za`, `unar` and `unrar` when
+  running outside the Flatpak. Each installed tool is tried in turn until one succeeds,
+  because being installed does not mean a tool can read the archive: Fedora's 7-Zip, for
+  example, ships without the RAR decoder. Installs run on a worker thread, so a
+  multi-gigabyte archive never freezes the window.
 
 ### Project layout
 
@@ -176,7 +186,8 @@ RenPyDeck/
 │       ├── __main__.py             #   enables `python -m renpydeck`
 │       ├── app.py                  #   GTK 4 application + main window
 │       ├── config.py               #   INI configuration (folder locations)
-│       └── games.py                #   scans both folders into the game list
+│       ├── games.py                #   scans both folders into the game list
+│       └── installer.py            #   unpacking + permission fixing
 ├── packaging/
 │   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
@@ -247,7 +258,7 @@ flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org
 # ... copy app files into build/flatpak-build/files ...
 flatpak build-finish build/flatpak-build --command=renpydeck \
     --share=ipc --socket=wayland --socket=fallback-x11 --device=dri \
-    --filesystem=xdg-download:ro
+    --filesystem=xdg-download
 flatpak build-export build/flatpak-repo build/flatpak-build stable
 flatpak build-bundle build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
 ```
@@ -309,19 +320,32 @@ A few important real-world variations the installer must tolerate:
 
 ### Key behaviors to be aware of
 
-- **Linux-only support:** A game is installable only if its extracted tree contains a Linux
-  launch script (`*.sh`) backed by a Linux `lib` runtime. Detection is content-based, not
-  filename-based. Windows-only and macOS-only payloads are ignored.
+- **Linux-only support:** A game is installable only if its unpacked tree contains a `renpy`
+  folder with a `*.sh` launch script in the same folder. The pair is searched for at any
+  depth, since archives wrap the game in a folder (or two) inconsistently; the first match
+  is the game root. Detection is content-based, not filename-based, so Windows-only payloads
+  are refused however the archive is named. Note that older games also carry `renpy` folders
+  deep inside `lib/.../python2.7/` — those have no launch script beside them and are
+  correctly skipped.
 - **Subfolder guarantee:** Extraction always lands inside a subfolder of the Games folder
   (named after the archive). Files are never extracted loose, even if the archive already
   has its own top-level folder.
-- **Permission fixing:** After extraction, the executable bit is set on (1) the launch
-  `.sh` script and (2) the Linux runtime under `lib/` — the platform binary, `python`,
-  `pythonw`, and the `.so` shared libraries. Many archives ship these without the executable
-  bit, which would otherwise stop the game from launching on the Deck.
-- **Non-destructive uninstall:** Uninstalling removes extracted files from the Games folder
-  only; the source archive in the Download folder is left untouched, so the game can be
-  reinstalled later.
+- **Permission fixing:** After extraction, the executable bit is set on (1) every `*.sh`
+  script anywhere in the game and (2) every file under the game's `lib/` folder — the
+  platform binary, `python`, `pythonw` and the shared libraries. Only the Linux x86_64
+  runtime actually needs it, but its folder name varies between Ren'Py generations, so the
+  whole `lib` tree is covered rather than guessed at. Many archives ship these without the
+  executable bit, which would otherwise stop the game from launching on the Deck.
+- **Staged install:** Extraction happens in a hidden staging folder inside the Games folder,
+  and is renamed into place only once both the unpacking and the Linux checks above have
+  succeeded — so a failed, refused or interrupted install never leaves a half-unpacked game
+  behind. The archive is deleted only after that, so if anything goes wrong it is still
+  there to retry with. Because the checks run on the unpacked tree, an unsupported archive
+  is unpacked first and then discarded; this keeps one code path for every archive format,
+  at the cost of some temporary disk space.
+- **Archives are consumed:** A successful install hard-deletes the archive from the Download
+  folder (no trash). Uninstalling later removes the extracted files from the Games folder;
+  reinstalling means downloading the game again.
 
 ### Bundled examples
 
@@ -330,7 +354,7 @@ must handle. They map archive → extracted result:
 
 | Download archive | Format | Extracted folder | Notable trait |
 | --- | --- | --- | --- |
-| `CORRUPTING_JOY-0.03.pc.zip` | zip | `CORRUPTING_JOY-0.03-pc/` | Script at top level; py3 lib + Windows lib bundled together |
+| `CORRUPTING_JOY-0.03.pc.zip` | zip | `CORRUPTING_JOY-0.03.pc/` | Script at top level; py3 lib + Windows lib bundled together |
 | `My_New_Paranormal_Life-0.6-linux.tar.bz2` | tar.bz2 | `My_New_Paranormal_Life-0.6-linux/MNPL-0.6-linux/` | Launch script nested one folder deeper |
 | `Mythos-1.1.0.0-market.zip` | zip | `Mythos-1.1.0.0-market/` | Ships Linux, Windows *and* macOS (`.app`) payloads |
 | `NetorareWifeMisumi-LustfulAwakening-1.0.1-win.zip` | zip | `NetorareWifeMisumi-LustfulAwakening-1.0.1-win/` | `-win` name, but supported — older `lib/linux-x86_64` layout |

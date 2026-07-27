@@ -62,7 +62,7 @@ flatpak build-finish "$BUILD_DIR" \
     --socket=wayland \
     --socket=fallback-x11 \
     --device=dri \
-    --filesystem=xdg-download:ro
+    --filesystem=xdg-download
 
 echo ">> Exporting build to a local repo"
 flatpak build-export "$REPO_DIR" "$BUILD_DIR" "$APP_BRANCH"
