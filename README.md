@@ -174,7 +174,9 @@ RenPyDeck/
 │   └── renpydeck/                  # the Python application package
 │       ├── __init__.py             #   package metadata (version)
 │       ├── __main__.py             #   enables `python -m renpydeck`
-│       └── app.py                  #   GTK 4 application + main window
+│       ├── app.py                  #   GTK 4 application + main window
+│       ├── config.py               #   INI configuration (folder locations)
+│       └── games.py                #   scans both folders into the game list
 ├── packaging/
 │   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
