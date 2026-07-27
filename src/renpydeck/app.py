@@ -44,6 +44,7 @@ from .games import GameEntry, find_games
 from .installer import InstallError, install
 from .launcher import LaunchError, run
 from .remover import RemoveError, describe, remove
+from .touchscroll import enable_drag_scrolling
 
 APP_ID = "sk.meluzina.RenPyDeck"
 
@@ -105,6 +106,7 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         self.library_scroller.set_policy(
             Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
         )
+        enable_drag_scrolling(self.library_scroller)  # the Deck's touchscreen
         # Toasts report how an install went without covering the list.
         self.toasts = Adw.ToastOverlay(child=self.library_scroller)
         toolbar_view.set_content(self.toasts)

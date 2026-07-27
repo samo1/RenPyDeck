@@ -39,6 +39,10 @@ echo ">> Installing application files into /app"
 # Python package -> /app/share/renpydeck/renpydeck (importable via launcher's PYTHONPATH)
 install -d "$BUILD_DIR/files/share/renpydeck"
 cp -r "$PROJECT_ROOT/src/renpydeck" "$BUILD_DIR/files/share/renpydeck/renpydeck"
+# Leave local bytecode behind: it is stale the moment the runtime's Python
+# differs from the one that produced it, and it only bloats the bundle.
+find "$BUILD_DIR/files/share/renpydeck" -name __pycache__ -type d -prune \
+    -exec rm -rf {} +
 
 # Launcher -> /app/bin/renpydeck
 install -Dm755 "$SCRIPT_DIR/renpydeck.sh" "$BUILD_DIR/files/bin/renpydeck"

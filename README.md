@@ -26,6 +26,9 @@ fixing up the file permissions Linux needs — so you can get straight to playin
   inside the main window. The Deck's gaming mode (the gamescope session) may never show a
   second window, and the system file picker it would need is unreachable there, so
   RenPyDeck opens neither.
+- **Scrolls by finger** — lists can be dragged and flicked on the Deck's touchscreen, which
+  gaming mode delivers as ordinary pointer input rather than as touch events (so GTK's own
+  kinetic scrolling never sees it). Taps still activate buttons.
 - **Linux-first** — support is decided by what's *inside* the archive, not by its
   filename: a game is playable only if it ships a Linux launch script. Windows-only
   games are detected and ignored, even when a "linux"-named archive isn't one (and vice
@@ -204,7 +207,8 @@ RenPyDeck/
 │       ├── games.py                #   scans both folders into the game list
 │       ├── installer.py            #   unpacking + permission fixing
 │       ├── launcher.py             #   running an installed game
-│       └── remover.py              #   deleting a game's files
+│       ├── remover.py              #   deleting a game's files
+│       └── touchscroll.py          #   drag/flick scrolling for the touchscreen
 ├── packaging/
 │   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)

@@ -22,6 +22,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, GLib  # noqa: E402
 
 from .config import default_download_dir, default_game_dir
+from .touchscroll import enable_drag_scrolling
 
 
 class FolderChooserPage(Adw.NavigationPage):
@@ -56,6 +57,7 @@ class FolderChooserPage(Adw.NavigationPage):
 
         self.scroller = Gtk.ScrolledWindow(vexpand=True)
         self.scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        enable_drag_scrolling(self.scroller)  # the Deck's touchscreen
         toolbar_view.set_content(self.scroller)
 
         self._show_current()
@@ -85,14 +87,22 @@ class FolderChooserPage(Adw.NavigationPage):
     def _show_current(self):
         self.up_button.set_sensitive(self.path.parent != self.path)
 
-        page = Adw.PreferencesPage()
+        # Deliberately not an Adw.PreferencesPage: that brings a scrolled
+        # window of its own, which would scroll instead of ours — and ours is
+        # the one that can be dragged by finger.
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        content.set_margin_top(18)
+        content.set_margin_bottom(18)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
 
         places = self._places_group()
         if places is not None:
-            page.add(places)
-        page.add(self._folders_group())
+            content.append(places)
+        content.append(self._folders_group())
 
-        self.scroller.set_child(page)
+        self.scroller.set_child(Adw.Clamp(child=content))
+        self.scroller.get_vadjustment().set_value(0)  # a new folder starts at the top
 
     def _places_group(self):
         """Shortcuts to the folders a Steam Deck user actually needs."""
