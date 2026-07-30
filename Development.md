@@ -45,6 +45,7 @@ RenPyDeck/
 │       └── touchscroll.py          #   drag/flick scrolling for the touchscreen
 ├── packaging/
 │   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
+│   ├── steam-assets.sh             # renders the Steam library artwork
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
 │   ├── sk.meluzina.RenPyDeck.desktop      # desktop entry
 │   ├── sk.meluzina.RenPyDeck.metainfo.xml # AppStream metadata
@@ -130,6 +131,37 @@ To uninstall it again:
 ```bash
 flatpak uninstall --user sk.meluzina.RenPyDeck
 ```
+
+## Rendering the Steam library artwork
+
+Added to Steam as a non-Steam game, RenPyDeck gets a blank tile unless artwork is set for
+it. The images for that are generated rather than kept as binaries in the repository:
+
+```bash
+./packaging/steam-assets.sh
+```
+
+They land in `dist/steam-assets/` — `grid-600x900.png` (the library tile Gaming Mode
+shows), `capsule-920x430.png`, `hero-1920x620.png`, `logo-1280x720.png` (transparent, drawn
+over the hero) and `icon-256x256.png` — and the same five are packed into
+**`dist/RenPyDeck-steam-assets.zip`**. That archive is the release asset to attach beside
+`RenPyDeck.flatpak`; the README tells users to download it and how to apply it in Steam.
+The folder is emptied before each run, so an asset that was renamed or dropped cannot
+survive in the archive, and the packing uses Python's `zipfile` module rather than the
+`zip` command — Python is a given here, another tool is not.
+
+The script needs **`rsvg-convert`** (`librsvg2-tools` on Fedora/SteamOS, `librsvg2-bin` on
+Debian/Ubuntu, `librsvg` on Arch). Each asset is an inline SVG built from the same motif as
+`packaging/sk.meluzina.RenPyDeck.svg` — the rounded blue tile, the play triangle, the deck
+bar — with the palette and the wordmark set once at the top of the file, so changing the
+application icon or the tagline means editing one place and re-running. Text is rendered
+with Cantarell, GNOME's UI font, falling back to Inter and DejaVu Sans on machines without
+it.
+
+Two things the layouts are deliberately careful about, both of which looked wrong before:
+the hero carries no wordmark (Steam draws the logo on top of it, so the name would appear
+twice) and nothing in it touches an edge, because Steam crops the hero at several aspect
+ratios and a clipped shape reads as a mistake.
 
 ## Anatomy of a Ren'Py game
 

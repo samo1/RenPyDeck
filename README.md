@@ -142,6 +142,30 @@ To play from **Gaming Mode**, add it to your Steam library while still in Deskto
    browse for. Tick it and confirm with **Add Selected Programs**.
 5. Switch to Gaming Mode. RenPyDeck is under **Non-Steam** in your library.
 
+#### Artwork for the Steam library
+
+A non-Steam shortcut starts out as a blank tile with a name on it. RenPyDeck comes with
+artwork you can use instead: download **`RenPyDeck-steam-assets.zip`** from the same release
+as the bundle and unpack it. It holds one image per place Steam shows a game.
+
+| File | Size | Steam calls it | Where it shows up |
+| --- | --- | --- | --- |
+| `grid-600x900.png` | 600×900 | Grid / vertical capsule | The tile in your library grid — the one Gaming Mode shows |
+| `capsule-920x430.png` | 920×430 | Capsule (wide) | Big Picture and the *most recently played* banner |
+| `hero-1920x620.png` | 1920×620 | Hero | The banner across the top of the game's page |
+| `logo-1280x720.png` | 1280×720 | Logo | Transparent wordmark, drawn on top of the Hero |
+| `icon-256x256.png` | 256×256 | Icon | List views and the shortcut itself |
+
+To apply them, right-click RenPyDeck in your Steam library, choose **Manage → Set custom
+artwork**, and pick the matching file for each. Steam saves them under
+`~/.steam/steam/userdata/<your-id>/config/grid/` as `<appid>p.png` (grid), `<appid>.png`
+(wide capsule), `<appid>_hero.png` and `<appid>_logo.png` — you can drop files there by
+hand instead, but Steam has to be restarted to notice them, so the menu is easier.
+
+Sizes are recommendations, not requirements: Steam scales anything with a sensible aspect
+ratio, so artwork of your own works just as well. If you would rather have community art,
+[SteamGridDB](https://www.steamgriddb.com/) is where most people get it.
+
 #### Controller setup for Gaming Mode
 
 Gaming Mode gives a non-Steam app whatever controller layout it is configured with, and the
