@@ -13,6 +13,10 @@ fixing up the file permissions Linux needs — so you can get straight to playin
 
 - **Graphical game manager** with two clear lists: games you've **downloaded** (archives,
   ready to install) and games you've **installed** (extracted, ready to play).
+- **Pick a game, then act on it** — the list shows names and states only. Tap a game to
+  select it and its buttons appear on that row; tap it again to put them away. One game is
+  selected at a time, so a long library stays readable and no button is ever ambiguous
+  about which game it belongs to.
 - **One-click install** — unpacks a downloaded archive into your games folder.
 - **One-click launch** — runs an installed game.
 - **One-click removal** — deletes a game's files (and its archive, if it still has one)
@@ -64,6 +68,11 @@ folder is listed as it is — archives are never opened just to look inside, bec
 gigabytes of compressed data would make the library slow to open. Folders in the Games
 folder, on the other hand, are cheap to look into, and only those holding a game RenPyDeck
 can launch are listed.
+
+In the library itself, a game is **selected before it is acted on**: rows carry just the
+name and the state until you pick one, and only the selected row shows its buttons. Picking
+another game moves them there; picking the same one again hides them. Nothing is selected
+when the library opens, or after an install, a launch or a removal has finished.
 
 ### The game lifecycle
 
@@ -399,6 +408,13 @@ A few important real-world variations the installer must tolerate:
   about one folder listing per game rather than a walk through every game's thousands of
   files. Archives are deliberately *not* opened for the same check: an unsupported one is
   only found out when it is installed, and the install refuses it then.
+- **Selection reveals the actions:** the library list selects one row at a time, and a row's
+  buttons are hidden unless it is the selected one. A click selects a row before activating
+  it, so a second click on the row that is already selected is what deselects it. Dragging
+  the list to scroll never selects anything: the scroll gesture claims the touch once it has
+  moved, which cancels the row's pending click. Focus is deliberately parked on a header
+  button whenever the list is rebuilt, because focus entering a single-selection list would
+  otherwise select the first game on its own.
 - **Subfolder guarantee:** Extraction always lands inside a subfolder of the Games folder
   (named after the archive). Files are never extracted loose, even if the archive already
   has its own top-level folder.

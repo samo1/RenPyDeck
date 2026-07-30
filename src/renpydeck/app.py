@@ -2,11 +2,15 @@
 
 The window opens on the **library** — a single alphabetically sorted list of
 every game RenPyDeck can see, whether it is still a downloaded archive or an
-already extracted (installed) game. Each entry shows only the actions that
-apply to it: *Install* for a downloaded archive, *Launch* for an installed
-game, *Remove* for either. Only games RenPyDeck could really start are listed
-as installed — a folder in the game folder that is not a Ren'Py game with a
-Linux launch script is left out (see :mod:`renpydeck.games`).
+already extracted (installed) game. Only games RenPyDeck could really start are
+listed as installed — a folder in the game folder that is not a Ren'Py game
+with a Linux launch script is left out (see :mod:`renpydeck.games`).
+
+The list is quiet until asked: a game shows its name and state, and picking it
+reveals the actions it allows — *Install* for a downloaded archive, *Launch*
+for an installed game, *Remove* for either. One game is picked at a time, and
+picking it again puts it away, so a long list stays readable and a button is
+only ever a tap away from the game it belongs to.
 
 Behind the library sits the **configuration screen** for choosing the two
 folders RenPyDeck works with — the *Download folder* (where downloaded game
@@ -62,6 +66,11 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         # stay disabled until it finishes, so only one runs at a time.
         self.busy = False
         self.game_buttons: list[Gtk.Button] = []
+        # The rows' action boxes, hidden until their row is the selected one.
+        self.row_actions: dict[Gtk.ListBoxRow, Gtk.Widget] = {}
+        # Whether the click (or key press) being handled is what selected the
+        # row; see _on_row_activated, which uses it to toggle the selection.
+        self.selection_just_changed = False
 
         self.set_title("RenPyDeck")
         self.set_default_size(800, 480)  # matches the Steam Deck's screen ratio
@@ -118,10 +127,23 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         else:
             self.library_scroller.set_child(self._build_empty_state())
 
+        # Park the focus on a header button. Focus moving into a list that
+        # selects one row at a time selects one, and the library is meant to
+        # open — and come back — with no game picked and no buttons showing.
+        self.set_focus(self.refresh_button)
+
     def _build_game_list(self, games: list[GameEntry]) -> Gtk.Widget:
         self.game_buttons = []
-        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.row_actions = {}
+        self.selection_just_changed = False
+
+        # One game at a time is selected, and only the selected one shows its
+        # buttons. The list is rebuilt on every scan, so nothing is selected to
+        # begin with.
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         listbox.add_css_class("boxed-list")
+        listbox.connect("row-selected", self._on_row_selected)
+        listbox.connect("row-activated", self._on_row_activated)
         for game in games:
             listbox.append(self._make_game_row(game))
 
@@ -146,14 +168,16 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
 
         Only the applicable actions get a button — Install for a downloaded
         archive, Launch for an installed game — so a row never shows a control
-        that cannot be used.
+        that cannot be used. The buttons stay hidden until the row is selected.
         """
         row = Adw.ActionRow(title=game.name, subtitle=self._describe(game))
         row.set_use_markup(False)  # names are plain text, not Pango markup
         row.set_title_lines(0)  # wrap long archive names instead of clipping
+        row.set_activatable(True)  # selecting it is what reveals the buttons
 
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         buttons.set_valign(Gtk.Align.CENTER)
+        buttons.set_visible(False)  # until this row is the selected one
 
         if game.is_downloaded:
             install = Gtk.Button(label="Install")
@@ -176,7 +200,28 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         self.game_buttons.append(remove)
 
         row.add_suffix(buttons)
+        self.row_actions[row] = buttons
         return row
+
+    # -- Selecting a game --------------------------------------------------
+
+    def _on_row_selected(self, _listbox, row):
+        """Show the selected row's buttons and put every other row's away."""
+        self.selection_just_changed = True
+        for candidate, actions in self.row_actions.items():
+            actions.set_visible(candidate is row)
+
+    def _on_row_activated(self, listbox, row):
+        """Deselect the row when it was already the selected one.
+
+        A click selects a row before activating it, so by now *row* is
+        selected either way; what tells the two apart is whether the selection
+        changed on the way here. It did not when the row was already selected —
+        which makes this the second click on it, and puts its buttons away.
+        """
+        if not self.selection_just_changed:
+            listbox.unselect_all()  # _on_row_selected(None) hides the buttons
+        self.selection_just_changed = False
 
     @staticmethod
     def _describe(game: GameEntry) -> str:
