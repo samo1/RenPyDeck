@@ -11,6 +11,9 @@ If the file does not exist yet, sensible defaults are written on first load:
 * **Game folder** — ``$XDG_DATA_HOME/renpydeck/games`` (e.g.
   ``~/.local/share/renpydeck/games``), the conventional, always-writable
   location for application-managed data.
+* **Delete the archive after installing** — off. Installing leaves the archive
+  where it is, so a game can be installed again without downloading it a second
+  time. Turning it on reclaims the space instead.
 """
 
 import configparser
@@ -26,6 +29,13 @@ APP_DIR_NAME = "renpydeck"
 _SECTION = "folders"
 _KEY_DOWNLOAD = "download"
 _KEY_GAME = "game"
+
+_SECTION_INSTALL = "install"
+_KEY_DELETE_ARCHIVE = "delete_archive"
+
+#: Keeping the archive is the default: it costs disk space, but re-installing a
+#: game is then a tap away rather than another download.
+DEFAULT_DELETE_ARCHIVE = False
 
 
 def config_dir() -> Path:
@@ -55,9 +65,15 @@ def default_game_dir() -> str:
 class Config:
     """In-memory view of the configuration, backed by the INI file."""
 
-    def __init__(self, download_dir: str, game_dir: str):
+    def __init__(
+        self,
+        download_dir: str,
+        game_dir: str,
+        delete_archive: bool = DEFAULT_DELETE_ARCHIVE,
+    ):
         self.download_dir = download_dir
         self.game_dir = game_dir
+        self.delete_archive = delete_archive
 
     @classmethod
     def load(cls) -> "Config":
@@ -74,7 +90,15 @@ class Config:
             _SECTION, _KEY_DOWNLOAD, fallback=default_download_dir()
         )
         game = parser.get(_SECTION, _KEY_GAME, fallback=default_game_dir())
-        return cls(download, game)
+        try:
+            delete_archive = parser.getboolean(
+                _SECTION_INSTALL, _KEY_DELETE_ARCHIVE, fallback=DEFAULT_DELETE_ARCHIVE
+            )
+        except ValueError:
+            # Hand-edited into something that is not a boolean: keep the
+            # archive, which is the choice that destroys nothing.
+            delete_archive = DEFAULT_DELETE_ARCHIVE
+        return cls(download, game, delete_archive)
 
     def ensure_directories(self) -> None:
         """Create the configured folders if they don't exist yet.
@@ -100,6 +124,9 @@ class Config:
         parser[_SECTION] = {
             _KEY_DOWNLOAD: self.download_dir,
             _KEY_GAME: self.game_dir,
+        }
+        parser[_SECTION_INSTALL] = {
+            _KEY_DELETE_ARCHIVE: "true" if self.delete_archive else "false",
         }
         with open(path, "w", encoding="utf-8") as handle:
             parser.write(handle)

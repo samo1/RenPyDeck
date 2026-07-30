@@ -1,8 +1,9 @@
 """Removing a game from the library.
 
 A library entry can be an extracted game in the game folder, an archive in the
-download folder, or — briefly, before the archive is consumed by an install —
-both. Removing takes away whatever is there.
+download folder, or both — which is the normal state of an installed game
+whose archive was kept. The two are removed independently: the caller passes
+the one the user asked to delete, and the other is left alone.
 
 This is a **hard delete**: files are unlinked, not moved to the trash, and
 nothing can be undone afterwards. The caller is expected to have asked the user

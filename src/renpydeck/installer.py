@@ -1,8 +1,10 @@
 """Installing a downloaded game.
 
 Installing means: unpack the archive from the download folder into the game
-folder, check that it really is a Ren'Py game that runs on Linux, fix up the
-file permissions such a game needs, and throw the archive away.
+folder, check that it really is a Ren'Py game that runs on Linux, and fix up the
+file permissions such a game needs. Whether the archive is then thrown away is
+the user's choice (see :mod:`renpydeck.config`); by default it is kept, so the
+game can be installed again without downloading it a second time.
 
 What is unpacked has to hold a ``renpy`` folder (the engine, which every game
 ships) with a ``*.sh`` launch script beside it (the Linux launcher). Anything
@@ -78,12 +80,17 @@ def install_name(archive: Path) -> str:
     return archive_stem(archive.name) or archive.stem
 
 
-def install(archive: Path, game_dir: str | Path) -> Path:
+def install(
+    archive: Path,
+    game_dir: str | Path,
+    delete_archive: bool = False,
+) -> Path:
     """Install *archive* into *game_dir* and return the created folder.
 
-    On success the archive file is deleted. On failure — including an archive
-    that turns out not to be a Linux Ren'Py game — nothing is left behind and
-    the archive is kept, so the install can be retried or the game replaced.
+    With *delete_archive* the archive file is deleted once the game is in
+    place. On failure — including an archive that turns out not to be a Linux
+    Ren'Py game — nothing is left behind and the archive is kept either way, so
+    the install can be retried or the game replaced.
     """
     archive = Path(archive)
     game_dir = Path(game_dir)
@@ -119,15 +126,16 @@ def install(archive: Path, game_dir: str | Path) -> Path:
         shutil.rmtree(staging, ignore_errors=True)
         raise InstallError(f"Could not install {archive.name}: {error}") from error
 
-    # Installed successfully: the archive has served its purpose. This is a
-    # hard delete — the file does not go to the trash.
-    try:
-        archive.unlink()
-    except OSError as error:
-        raise InstallError(
-            f"{target.name} was installed, but its archive could not be "
-            f"deleted: {error}"
-        ) from error
+    if delete_archive:
+        # The archive has served its purpose and the user asked for the space
+        # back. This is a hard delete — the file does not go to the trash.
+        try:
+            archive.unlink()
+        except OSError as error:
+            raise InstallError(
+                f"{target.name} was installed, but its archive could not be "
+                f"deleted: {error}"
+            ) from error
 
     return target
 

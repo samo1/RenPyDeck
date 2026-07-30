@@ -209,8 +209,9 @@ A few important real-world variations the installer must tolerate:
 - **Staged install:** Extraction happens in a hidden staging folder inside the Games folder,
   and is renamed into place only once both the unpacking and the Linux checks above have
   succeeded — so a failed, refused or interrupted install never leaves a half-unpacked game
-  behind. The archive is deleted only after that, so if anything goes wrong it is still
-  there to retry with. Because the checks run on the unpacked tree, an unsupported archive
+  behind. An archive is only deleted (when the setting asks for it) after that, so if
+  anything goes wrong it is still there to retry with. Because the checks run on the
+  unpacked tree, an unsupported archive
   is unpacked first and then discarded; this keeps one code path for every archive format,
   at the cost of some temporary disk space.
 - **One game at a time:** Launching runs the game as a child process and waits for it,
@@ -218,11 +219,18 @@ A few important real-world variations the installer must tolerate:
   through RenPyDeck) that never had its permissions fixed gets them fixed on the spot rather
   than failing to start. If the game exits with a non-zero status, RenPyDeck says so — the
   game's own output goes to the terminal RenPyDeck was started from.
-- **Archives are consumed:** A successful install hard-deletes the archive from the Download
-  folder (no trash). Removing the game later deletes its extracted files the same way;
-  playing it again means downloading it again.
-- **Removal is confirmed, then final:** Remove always asks first, naming the game folder and
-  the archive it is about to delete. Confirming deletes both if both are present — nothing
+- **Archives are kept unless asked otherwise:** `install.delete_archive` (off by default)
+  decides whether a successful install hard-deletes the archive from the Download folder
+  (no trash). Off, the normal state of an installed game is *installed and downloaded*, and
+  it is the library entry that carries both paths. A value that is missing or not a boolean
+  counts as off — of the two settings, that is the one that destroys nothing.
+- **The game and its archive are removed separately:** the row carries a single *Remove*
+  button — a list row on a handheld has no space for more — and the choice is made on the
+  confirmation page, which offers *Remove game*, *Remove archive* and *Remove both* when
+  the entry has both, and one plain *Remove* when it does not. *Install* is hidden once a
+  game is installed, since installing over the existing folder would only be refused.
+- **Removal is confirmed, then final:** Remove always asks first, naming what it is about to
+  delete and, when the entry has two halves, what each answer would leave behind. Nothing
   goes to the trash, and anything already gone counts as removed rather than an error.
 
 ## Bundled examples

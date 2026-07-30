@@ -7,8 +7,9 @@ listed as installed — a folder in the game folder that is not a Ren'Py game
 with a Linux launch script is left out (see :mod:`renpydeck.games`).
 
 The list is quiet until asked: a game shows its name and state, and picking it
-reveals the actions it allows — *Install* for a downloaded archive, *Launch*
-for an installed game, *Remove* for either. One game is picked at a time, and
+reveals the actions it allows — *Install* for an archive that is not installed
+yet, *Launch* for an installed game, *Remove* for anything. One game is picked
+at a time, and
 picking it again puts it away, so a long list stays readable and a button is
 only ever a tap away from the game it belongs to.
 
@@ -27,9 +28,12 @@ own in-window header bar with an **Exit** button — there is no titlebar close
 button to rely on.
 
 *Install* unpacks an archive into the game folder (see
-:mod:`renpydeck.installer`), *Launch* runs an installed game (see
-:mod:`renpydeck.launcher`) and *Remove* deletes it for good (see
-:mod:`renpydeck.remover`), after asking. All three work on a worker thread with
+:mod:`renpydeck.installer`), keeping or deleting the archive as the
+configuration screen says; *Launch* runs an installed game (see
+:mod:`renpydeck.launcher`); and *Remove* deletes the installed game, its
+archive, or both for good (see :mod:`renpydeck.remover`), after asking which.
+All three work
+on a worker thread with
 the library's buttons disabled until they finish — so a big archive never
 freezes the window, and only one game runs at a time.
 """
@@ -166,9 +170,10 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
     def _make_game_row(self, game: GameEntry) -> Adw.ActionRow:
         """Build one list row: the game's name plus the actions it allows.
 
-        Only the applicable actions get a button — Install for a downloaded
-        archive, Launch for an installed game — so a row never shows a control
-        that cannot be used. The buttons stay hidden until the row is selected.
+        Only the applicable actions get a button — Install for an archive that
+        is not installed yet, Launch for an installed game — so a row never
+        shows a control that cannot be used. The buttons stay hidden until the
+        row is selected.
         """
         row = Adw.ActionRow(title=game.name, subtitle=self._describe(game))
         row.set_use_markup(False)  # names are plain text, not Pango markup
@@ -179,7 +184,7 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         buttons.set_valign(Gtk.Align.CENTER)
         buttons.set_visible(False)  # until this row is the selected one
 
-        if game.is_downloaded:
+        if game.is_downloaded and not game.is_installed:
             install = Gtk.Button(label="Install")
             install.connect("clicked", self.on_install_clicked, game)
             buttons.append(install)
@@ -192,12 +197,15 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             buttons.append(launch)
             self.game_buttons.append(launch)
 
-        # Remove applies either way: an entry is downloaded, installed or both.
-        remove = Gtk.Button(label="Remove")
-        remove.add_css_class("destructive-action")
-        remove.connect("clicked", self.on_remove_clicked, game)
-        buttons.append(remove)
-        self.game_buttons.append(remove)
+        # One Remove button, however much the entry consists of. Which of the
+        # game and the archive is to go is asked on the confirmation page,
+        # where there is room to spell the choice out; a row this narrow has
+        # none to spare.
+        remove_button = Gtk.Button(label="Remove")
+        remove_button.add_css_class("destructive-action")
+        remove_button.connect("clicked", self.on_remove_clicked, game)
+        buttons.append(remove_button)
+        self.game_buttons.append(remove_button)
 
         row.add_suffix(buttons)
         self.row_actions[row] = buttons
@@ -251,7 +259,11 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
     def _install_worker(self, archive):
         """Runs on a worker thread — must not touch any widget directly."""
         try:
-            installed = install(archive, self.config.game_dir)
+            installed = install(
+                archive,
+                self.config.game_dir,
+                delete_archive=self.config.delete_archive,
+            )
         except InstallError as error:
             GLib.idle_add(self._on_install_finished, None, str(error))
         except Exception as error:  # unexpected, but must not kill the thread
@@ -330,28 +342,57 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
     # -- Removing ----------------------------------------------------------
 
     def on_remove_clicked(self, button, game: GameEntry):
-        """Ask first, then delete the game's files for good."""
+        """Ask what to delete, then do it for good.
+
+        An entry that is installed *and* still has its archive can lose either
+        one without the other, so the question offers all three answers. When
+        there is only one thing to delete, there is only one way to say yes.
+        """
         if self.busy:
             return
 
         self._push_message(
             heading=f"Remove {game.name}?",
-            body=(
-                f"This permanently deletes "
-                f"{describe(game.archive, game.install_dir)}. "
-                f"There is no way back — the files do not go to the trash."
-            ),
-            actions=[
-                ("Cancel", None, None),
-                (
-                    "Remove",
-                    "destructive-action",
-                    lambda: self._start_remove(button, game),
-                ),
+            body=self._removal_question(game),
+            actions=[("Cancel", None, None)] + [
+                (label, "destructive-action", self._remover(button, archive, install_dir))
+                for label, archive, install_dir in self._removal_choices(game)
             ],
         )
 
-    def _start_remove(self, button, game: GameEntry):
+    @staticmethod
+    def _removal_question(game: GameEntry) -> str:
+        """The body of the confirmation, spelling out what is at stake."""
+        ending = "There is no way back — the files do not go to the trash."
+        if not (game.is_installed and game.is_downloaded):
+            return (
+                f"This permanently deletes "
+                f"{describe(game.archive, game.install_dir)}. {ending}"
+            )
+        return (
+            f"“{game.install_dir.name}” is installed, and its archive "
+            f"“{game.archive.name}” is still in the download folder. Choose "
+            f"what to delete — removing the game on its own keeps the archive, "
+            f"so it can be installed again. {ending}"
+        )
+
+    @staticmethod
+    def _removal_choices(game: GameEntry):
+        """(button label, archive, install_dir) for every answer but Cancel."""
+        if not (game.is_installed and game.is_downloaded):
+            return [("Remove", game.archive, game.install_dir)]
+        return [
+            ("Remove game", None, game.install_dir),
+            ("Remove archive", game.archive, None),
+            ("Remove both", game.archive, game.install_dir),
+        ]
+
+    def _remover(self, button, archive, install_dir):
+        """The callback that removes exactly what one answer asked for."""
+        name = (install_dir or archive).name
+        return lambda: self._start_remove(button, archive, install_dir, name)
+
+    def _start_remove(self, button, archive, install_dir, name):
         if self.busy:
             return
 
@@ -360,25 +401,25 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
 
         thread = threading.Thread(
             target=self._remove_worker,
-            args=(game,),
+            args=(archive, install_dir, name),
             daemon=True,
         )
         thread.start()
 
-    def _remove_worker(self, game: GameEntry):
+    def _remove_worker(self, archive, install_dir, name):
         """Runs on a worker thread — must not touch any widget directly."""
         try:
-            remove(archive=game.archive, install_dir=game.install_dir)
+            remove(archive=archive, install_dir=install_dir)
         except RemoveError as error:
-            GLib.idle_add(self._on_remove_finished, game.name, str(error))
+            GLib.idle_add(self._on_remove_finished, name, str(error))
         except Exception as error:  # unexpected, but must not kill the thread
             GLib.idle_add(
                 self._on_remove_finished,
-                game.name,
-                f"Unexpected error while removing {game.name}: {error}",
+                name,
+                f"Unexpected error while removing {name}: {error}",
             )
         else:
-            GLib.idle_add(self._on_remove_finished, game.name, None)
+            GLib.idle_add(self._on_remove_finished, name, None)
 
     def _on_remove_finished(self, name, error):
         """Back on the main thread: report the result and rescan the folders."""
@@ -477,7 +518,28 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         )
         group.add(self.game_row)
 
+        installing = Adw.PreferencesGroup(title="Installing")
+        page.add(installing)
+
+        self.delete_archive_row = Adw.SwitchRow(
+            title="Delete the archive after installing",
+            subtitle=(
+                "Off keeps the archive in the download folder, so the game can "
+                "be installed again without downloading it."
+            ),
+        )
+        self.delete_archive_row.set_subtitle_lines(0)  # wrap, do not clip
+        self.delete_archive_row.set_active(self.config.delete_archive)
+        self.delete_archive_row.connect(
+            "notify::active", self.on_delete_archive_toggled
+        )
+        installing.add(self.delete_archive_row)
+
         return Adw.NavigationPage(title="Settings", child=toolbar_view)
+
+    def on_delete_archive_toggled(self, row, _pspec):
+        self.config.delete_archive = row.get_active()
+        self.config.save()  # settings apply (and persist) immediately
 
     def on_settings_clicked(self, _button):
         self.navigation.push(self.settings_page)

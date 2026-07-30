@@ -19,8 +19,12 @@ fixing up the file permissions Linux needs — so you can get straight to playin
   about which game it belongs to.
 - **One-click install** — unpacks a downloaded archive into your games folder.
 - **One-click launch** — runs an installed game.
-- **One-click removal** — deletes a game's files (and its archive, if it still has one)
-  after a confirmation prompt.
+- **One-click removal** — deletes an installed game, its archive, or both, after a
+  confirmation prompt that asks which. Removing the game you have finished with can leave
+  the archive in place, ready to install again.
+- **Keeps your archives by default** — installing leaves the downloaded archive where it
+  is, so a game can be reinstalled without downloading it again. Switch *Delete the archive
+  after installing* on in the settings to reclaim the space instead.
 - **Many archive formats** — handles `.zip`, `.tar.bz2`, `.rar`, and other common
   compressed formats Ren'Py games are distributed in.
 - **Configurable folder locations** for your downloads and your installed games.
@@ -87,8 +91,10 @@ when the library opens, or after an install, a launch or a removal has finished.
    - After extraction, RenPyDeck **fixes executable permissions**: every `*.sh` launch
      script in the game — wherever it sits in the tree — and everything inside the game's
      `lib` folder, which is searched for rather than assumed to be at the top.
-   - Once the game is unpacked, its **archive is deleted** from the Download folder. This is
-     a hard delete: the file does not go to the trash.
+   - Once the game is unpacked, the **archive is kept** in the Download folder, so the game
+     can be installed again later without downloading it a second time. Turn *Delete the
+     archive after installing* on in the settings and it is deleted instead — a hard delete:
+     the file does not go to the trash.
    - Support is decided by **content, not filename**, regardless of whether the archive is
      named `-win`, `-pc`, `-linux` or anything else. What was unpacked must contain a
      **`renpy` folder** (the engine — every Ren'Py game ships it) with a **`*.sh` launch
@@ -98,10 +104,12 @@ when the library opens, or after an install, a launch or a removal has finished.
    script from the game root — the folder holding `renpy` — with that folder as the working
    directory, which is what the script expects. The game takes over in its own window;
    RenPyDeck waits behind it with its buttons disabled, so only one game runs at a time.
-4. **Remove** — Choose **Remove** to delete a game from the library. RenPyDeck asks for
-   confirmation first, naming exactly what will go, and then deletes whatever the entry
-   consists of: the extracted game, its archive, or both. This is a hard delete — nothing
-   goes to the trash and nothing can be undone.
+4. **Remove** — Choose **Remove** to delete a game from the library, and RenPyDeck asks
+   before deleting anything. For a game that is installed *and* still has its archive, the
+   question offers all three answers — **Remove game**, **Remove archive**, **Remove
+   both** — so you can free the space taken by the one you no longer need and keep the
+   other. When there is only one thing to delete, it just names it and asks. This is a hard
+   delete — nothing goes to the trash and nothing can be undone.
 
 ---
 
@@ -184,22 +192,27 @@ whenever you change a folder in the configuration screen. It looks like this:
 [folders]
 download = /home/deck/Downloads
 game = /home/deck/.local/share/renpydeck/games
+
+[install]
+delete_archive = false
 ```
 
 | Key | Meaning | Default |
 | --- | --- | --- |
-| `download` | Folder scanned for downloaded game archives. | Your desktop's standard **Downloads** folder (`XDG_DOWNLOAD_DIR`). |
-| `game` | Folder where games are extracted/installed. | `$XDG_DATA_HOME/renpydeck/games` (e.g. `~/.local/share/renpydeck/games`). |
+| `folders.download` | Folder scanned for downloaded game archives. | Your desktop's standard **Downloads** folder (`XDG_DOWNLOAD_DIR`). |
+| `folders.game` | Folder where games are extracted/installed. | `$XDG_DATA_HOME/renpydeck/games` (e.g. `~/.local/share/renpydeck/games`). |
+| `install.delete_archive` | Delete the archive once the game is installed. | `false` — the archive is kept, so the game can be installed again without downloading it. |
 
 Both folders are created on startup if they don't already exist. You can edit the file by
-hand, but it's easier to use the in-app configuration screen.
+hand, but it's easier to use the in-app configuration screen. A missing or unreadable
+`delete_archive` value counts as `false`, the setting that deletes nothing.
 
 ### Choosing folders outside the sandbox (Flatpak)
 
 The Flatpak ships with read-write access to your **Downloads** folder
-(`--filesystem=xdg-download`) — write access is needed because installing a game deletes
-its archive — and the default game folder lives in the app's own always-writable data
-directory. With those defaults, no extra setup is needed.
+(`--filesystem=xdg-download`) — write access is needed to remove an archive, whether an
+install consumes it or you delete it from the library — and the default game folder lives
+in the app's own always-writable data directory. With those defaults, no extra setup is needed.
 
 If you want to point RenPyDeck at a location **outside** the sandbox — for example games on
 a Steam Deck **SD card** (`/run/media/...`) or any other custom folder — the app needs
