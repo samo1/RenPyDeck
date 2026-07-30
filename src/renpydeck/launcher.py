@@ -15,7 +15,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from .games import find_engine_dirs, find_launch_script
+from .games import find_launch_script, has_engine_dir
 from .installer import fix_permissions
 
 
@@ -33,7 +33,7 @@ def find_script(game_dir: str | Path) -> Path:
     if script is not None:
         return script
 
-    if find_engine_dirs(root):
+    if has_engine_dir(root):
         raise LaunchError(
             f"{root.name} has no Linux launch script (a “.sh” file) next to "
             f"its “renpy” folder, so it cannot be started here."

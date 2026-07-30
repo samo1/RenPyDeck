@@ -4,7 +4,9 @@ The window opens on the **library** — a single alphabetically sorted list of
 every game RenPyDeck can see, whether it is still a downloaded archive or an
 already extracted (installed) game. Each entry shows only the actions that
 apply to it: *Install* for a downloaded archive, *Launch* for an installed
-game, *Remove* for either.
+game, *Remove* for either. Only games RenPyDeck could really start are listed
+as installed — a folder in the game folder that is not a Ren'Py game with a
+Linux launch script is left out (see :mod:`renpydeck.games`).
 
 Behind the library sits the **configuration screen** for choosing the two
 folders RenPyDeck works with — the *Download folder* (where downloaded game

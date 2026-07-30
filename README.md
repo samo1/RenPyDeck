@@ -37,7 +37,9 @@ fixing up the file permissions Linux needs — so you can get straight to playin
 - **Linux-first** — support is decided by what's *inside* the archive, not by its
   filename: a game is playable only if it ships a Linux launch script. Windows-only
   games are detected and ignored, even when a "linux"-named archive isn't one (and vice
-  versa).
+  versa). The same check decides what the library shows as installed: only a folder
+  RenPyDeck can actually start is listed, so whatever else lives in your Games folder
+  stays out of the way.
 - **Automatic permission fixing** — sets the executable bit on the game's launch shell
   script and on the Linux runtime under its `lib` folder (the platform binary, `python`,
   `pythonw`, and the `.so` shared libraries), so games run even when the archive forgot to.
@@ -57,7 +59,11 @@ RenPyDeck is built around two folders that you configure:
 | **Download folder** | Holds your downloaded games as **compressed archives** (`.zip`, `.tar.bz2`, `.rar`, …). | `download/` |
 | **Games folder** | Holds your **extracted, installed** games. | `games/` |
 
-The application scans both folders to build its two lists.
+The application scans both folders to build its two lists. Every archive in the Download
+folder is listed as it is — archives are never opened just to look inside, because reading
+gigabytes of compressed data would make the library slow to open. Folders in the Games
+folder, on the other hand, are cheap to look into, and only those holding a game RenPyDeck
+can launch are listed.
 
 ### The game lifecycle
 
@@ -379,12 +385,20 @@ A few important real-world variations the installer must tolerate:
 ### Key behaviors to be aware of
 
 - **Linux-only support:** A game is installable only if its unpacked tree contains a `renpy`
-  folder with a `*.sh` launch script in the same folder. The pair is searched for at any
-  depth, since archives wrap the game in a folder (or two) inconsistently; the first match
-  is the game root. Detection is content-based, not filename-based, so Windows-only payloads
-  are refused however the archive is named. Note that older games also carry `renpy` folders
-  deep inside `lib/.../python2.7/` — those have no launch script beside them and are
-  correctly skipped.
+  folder with a `*.sh` launch script in the same folder. The pair is searched for down to
+  two folders below the top, since archives wrap the game in a folder (or two)
+  inconsistently; the first match is the game root, and an archive that buries the game
+  deeper than that is refused rather than installed into a game the library would not show.
+  Detection is content-based, not filename-based, so Windows-only payloads are refused
+  however the archive is named. Note that older games also carry `renpy` folders deep inside
+  `lib/.../python2.7/` — those have no launch script beside them and are correctly skipped.
+- **Only launchable installs are listed:** the same `renpy` + `*.sh` search runs over each
+  sub-folder of the Games folder, and one without a launch script never appears in the
+  library — no *Launch* button that could not work, and no rows for folders that are not
+  games. The search stops at the first game root it finds, so listing the library costs
+  about one folder listing per game rather than a walk through every game's thousands of
+  files. Archives are deliberately *not* opened for the same check: an unsupported one is
+  only found out when it is installed, and the install refuses it then.
 - **Subfolder guarantee:** Extraction always lands inside a subfolder of the Games folder
   (named after the archive). Files are never extracted loose, even if the archive already
   has its own top-level folder.

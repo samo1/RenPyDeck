@@ -30,7 +30,12 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from .games import archive_stem, find_engine_dirs, find_launch_script
+from .games import (
+    GAME_ROOT_DEPTH,
+    archive_stem,
+    find_launch_script,
+    has_engine_dir,
+)
 
 #: Extensions handled in-process by the standard library.
 _ZIP_SUFFIXES = (".zip",)
@@ -87,9 +92,12 @@ def install(archive: Path, game_dir: str | Path) -> Path:
     if not archive.is_file():
         raise InstallError(f"The archive {archive.name} is gone.")
     if target.exists():
+        # Not necessarily a game shown in the library: a folder that holds no
+        # launchable game is not listed there, so name the folder rather than
+        # telling the user to remove an entry they cannot see.
         raise InstallError(
-            f"“{target.name}” is already installed. Remove it first to "
-            f"install this archive again."
+            f"A folder named “{target.name}” is already in the game folder. "
+            f"Remove or rename it before installing this archive."
         )
 
     staging = game_dir / (_STAGING_PREFIX + target.name)
@@ -214,19 +222,33 @@ def find_game_root(root: Path, archive_name: str = "the archive") -> Path:
     game at all — and a ``*.sh`` launch script right next to it. A Windows-only
     release has the engine folder but no script. See
     :func:`renpydeck.games.find_launch_script`, which does the searching.
+
+    The root also has to be near the top: the library only looks that far when
+    it scans installed games, so a game buried deeper would install and then
+    not be listed. It is refused here instead.
     """
-    if not find_engine_dirs(root):
+    if not has_engine_dir(root):
         raise InstallError(
             f"{archive_name} does not contain a “renpy” folder, so it is not a "
             f"Ren'Py game RenPyDeck can install."
         )
 
+    # Searched without a depth limit, so that a game which is merely buried too
+    # deep can be told apart from one with no Linux launcher at all.
     script = find_launch_script(root)
     if script is None:
         raise InstallError(
             f"{archive_name} has no Linux launch script (a “.sh” file) next to "
             f"its “renpy” folder — it looks like a Windows-only release, which "
             f"the Steam Deck cannot run."
+        )
+
+    depth = len(script.parent.relative_to(root).parts)
+    if depth > GAME_ROOT_DEPTH:
+        raise InstallError(
+            f"{archive_name} keeps the game {depth} folders deep inside itself, "
+            f"which is deeper than RenPyDeck looks. Repack it with the game "
+            f"nearer the top, or unpack it into the game folder yourself."
         )
     return script.parent
 
