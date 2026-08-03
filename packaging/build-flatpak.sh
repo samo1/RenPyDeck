@@ -60,13 +60,19 @@ install -Dm644 "$SCRIPT_DIR/$APP_ID.svg" \
     "$BUILD_DIR/files/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 
 echo ">> Finishing build (declaring sandbox permissions)"
+# ~/.renpy is where every Ren'Py game keeps its saves and, since Ren'Py 8.3,
+# the key it signs them with (~/.renpy/tokens/security_keys.txt). Without the
+# real folder the sandbox hands the game a throwaway one: saves made here are
+# gone when the app exits, and a save made outside the launcher is refused as
+# "created on another computer". Shared, a game plays the same either way.
 flatpak build-finish "$BUILD_DIR" \
     --command=renpydeck \
     --share=ipc \
     --socket=wayland \
     --socket=fallback-x11 \
     --device=dri \
-    --filesystem=xdg-download
+    --filesystem=xdg-download \
+    --filesystem=~/.renpy:create
 
 echo ">> Exporting build to a local repo"
 flatpak build-export "$REPO_DIR" "$BUILD_DIR" "$APP_BRANCH"

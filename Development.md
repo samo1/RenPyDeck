@@ -114,7 +114,7 @@ flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org
 # ... copy app files into build/flatpak-build/files ...
 flatpak build-finish build/flatpak-build --command=renpydeck \
     --share=ipc --socket=wayland --socket=fallback-x11 --device=dri \
-    --filesystem=xdg-download
+    --filesystem=xdg-download --filesystem=~/.renpy:create
 flatpak build-export build/flatpak-repo build/flatpak-build stable
 flatpak build-bundle build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
 ```
@@ -264,6 +264,17 @@ A few important real-world variations the installer must tolerate:
 - **Removal is confirmed, then final:** Remove always asks first, naming what it is about to
   delete and, when the entry has two halves, what each answer would leave behind. Nothing
   goes to the trash, and anything already gone counts as removed rather than an error.
+- **The game's own `~/.renpy` is shared with the sandbox:** a Ren'Py game keeps its saves in
+  `~/.renpy/<save_directory>/` (and, in parallel, in `<game>/game/saves/`), and since
+  Ren'Py 8.3 it signs every save with a key in `~/.renpy/tokens/security_keys.txt` —
+  a save whose signature is from an unknown key makes the game ask whether the save can be
+  trusted, because it was "created on another computer". A Flatpak without home access has
+  no `~/.renpy`: `$HOME` inside the sandbox is a throwaway directory, so the game writes
+  saves that vanish when RenPyDeck exits and mints a fresh signing key on every launch —
+  which makes both saves from outside the launcher and saves from the launcher's own
+  previous run untrusted. `--filesystem=~/.renpy:create` hands the game the real folder, so
+  a game plays the same whether it was started by RenPyDeck or by anything else. It is the
+  only permission RenPyDeck asks for on the games' behalf rather than its own.
 
 ## Bundled examples
 

@@ -244,6 +244,13 @@ The Flatpak ships with read-write access to your **Downloads** folder
 install consumes it or you delete it from the library — and the default game folder lives
 in the app's own always-writable data directory. With those defaults, no extra setup is needed.
 
+It also has access to **`~/.renpy`** (`--filesystem=~/.renpy:create`), the folder every
+Ren'Py game keeps its saves in. That folder belongs to the games, not to RenPyDeck, and
+sharing it is what makes a game play the same whether you start it here or straight from
+the file manager: the same saves are there, and the game does not warn that a save was
+"created on another computer". Without it the sandbox would hand each game an empty, throwaway
+home — saves would disappear when RenPyDeck closes.
+
 If you want to point RenPyDeck at a location **outside** the sandbox — for example games on
 a Steam Deck **SD card** (`/run/media/...`) or any other custom folder — the app needs
 permission to reach it. RenPyDeck's folder browser is a plain view of the filesystem as the
