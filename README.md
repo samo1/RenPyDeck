@@ -7,6 +7,12 @@ download → install → play → uninstall lifecycle into a few taps in a clean
 interface. It handles the fiddly parts — unpacking archives into tidy subfolders and
 fixing up the file permissions Linux needs — so you can get straight to playing.
 
+![The RenPyDeck library, with one game selected and its buttons showing](docs/screenshot-library.png)
+
+*The library: downloaded archives and installed games in one list. The selected game shows
+its buttons — here an installed game that still has its archive, so it can be launched,
+and removed either way.*
+
 ---
 
 ## Features
