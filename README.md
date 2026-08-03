@@ -251,6 +251,9 @@ the file manager: the same saves are there, and the game does not warn that a sa
 "created on another computer". Without it the sandbox would hand each game an empty, throwaway
 home — saves would disappear when RenPyDeck closes.
 
+The last permission is **sound** (`--socket=pulseaudio`, which is also what PipeWire serves
+on SteamOS). RenPyDeck is silent itself; a game started without it would play mute.
+
 If you want to point RenPyDeck at a location **outside** the sandbox — for example games on
 a Steam Deck **SD card** (`/run/media/...`) or any other custom folder — the app needs
 permission to reach it. RenPyDeck's folder browser is a plain view of the filesystem as the

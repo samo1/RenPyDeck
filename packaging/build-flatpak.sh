@@ -60,6 +60,10 @@ install -Dm644 "$SCRIPT_DIR/$APP_ID.svg" \
     "$BUILD_DIR/files/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 
 echo ">> Finishing build (declaring sandbox permissions)"
+# The sound socket is for the games, not for RenPyDeck itself, which is silent:
+# a game started without it comes up mute ("PulseAudio: Unable to connect").
+# The name is historical — it is the same socket PipeWire serves on SteamOS.
+#
 # ~/.renpy is where every Ren'Py game keeps its saves and, since Ren'Py 8.3,
 # the key it signs them with (~/.renpy/tokens/security_keys.txt). Without the
 # real folder the sandbox hands the game a throwaway one: saves made here are
@@ -70,6 +74,7 @@ flatpak build-finish "$BUILD_DIR" \
     --share=ipc \
     --socket=wayland \
     --socket=fallback-x11 \
+    --socket=pulseaudio \
     --device=dri \
     --filesystem=xdg-download \
     --filesystem=~/.renpy:create

@@ -113,8 +113,8 @@ Under the hood the script runs the standard `flatpak` build steps:
 flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org.gnome.Platform 49
 # ... copy app files into build/flatpak-build/files ...
 flatpak build-finish build/flatpak-build --command=renpydeck \
-    --share=ipc --socket=wayland --socket=fallback-x11 --device=dri \
-    --filesystem=xdg-download --filesystem=~/.renpy:create
+    --share=ipc --socket=wayland --socket=fallback-x11 --socket=pulseaudio \
+    --device=dri --filesystem=xdg-download --filesystem=~/.renpy:create
 flatpak build-export build/flatpak-repo build/flatpak-build stable
 flatpak build-bundle build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
 ```
@@ -273,8 +273,12 @@ A few important real-world variations the installer must tolerate:
   saves that vanish when RenPyDeck exits and mints a fresh signing key on every launch —
   which makes both saves from outside the launcher and saves from the launcher's own
   previous run untrusted. `--filesystem=~/.renpy:create` hands the game the real folder, so
-  a game plays the same whether it was started by RenPyDeck or by anything else. It is the
-  only permission RenPyDeck asks for on the games' behalf rather than its own.
+  a game plays the same whether it was started by RenPyDeck or by anything else.
+- **Sound is for the games:** RenPyDeck itself never makes a noise, but a game started
+  inside the sandbox without `--socket=pulseaudio` comes up mute (`PulseAudio: Unable to
+  connect: Connection refused`) — the socket name is historical, and it is the one PipeWire
+  serves on SteamOS. Together with `~/.renpy` above, it is a permission the app holds on the
+  games' behalf rather than its own.
 
 ## Bundled examples
 
