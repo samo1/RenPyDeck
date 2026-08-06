@@ -70,8 +70,15 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         # stay disabled until it finishes, so only one runs at a time.
         self.busy = False
         self.game_buttons: list[Gtk.Button] = []
-        # The rows' action boxes, hidden until their row is the selected one.
+        # The rows' action boxes, hidden until their row is the selected one,
+        # and the game each row stands for.
         self.row_actions: dict[Gtk.ListBoxRow, Gtk.Widget] = {}
+        self.row_keys: dict[Gtk.ListBoxRow, str] = {}
+        # The list those rows are in, or None while there is no game to list.
+        self.library_list: Gtk.ListBox | None = None
+        # The selected game's key, kept across the rescans that rebuild the
+        # list so that installing a game does not lose the user's place in it.
+        self.selected_key: str | None = None
         # Whether the click (or key press) being handled is what selected the
         # row; see _on_row_activated, which uses it to toggle the selection.
         self.selection_just_changed = False
@@ -130,26 +137,49 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
             self.library_scroller.set_child(self._build_game_list(games))
         else:
             self.library_scroller.set_child(self._build_empty_state())
+            self.row_actions = {}
+            self.row_keys = {}
+            self.library_list = None
+            self.selected_key = None
 
         # Park the focus on a header button. Focus moving into a list that
-        # selects one row at a time selects one, and the library is meant to
-        # open — and come back — with no game picked and no buttons showing.
+        # selects one row at a time selects one, and a game is picked here by
+        # asking for it — not by the focus happening to land on its row.
         self.set_focus(self.refresh_button)
 
     def _build_game_list(self, games: list[GameEntry]) -> Gtk.Widget:
         self.game_buttons = []
         self.row_actions = {}
-        self.selection_just_changed = False
+        self.row_keys = {}
 
         # One game at a time is selected, and only the selected one shows its
-        # buttons. The list is rebuilt on every scan, so nothing is selected to
-        # begin with.
+        # buttons.
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         listbox.add_css_class("boxed-list")
         listbox.connect("row-selected", self._on_row_selected)
         listbox.connect("row-activated", self._on_row_activated)
+        # From here on this is *the* list: the one it replaces still exists
+        # until the scroller drops it, and unselects its row on the way out.
+        self.library_list = listbox
+
+        selected = None
         for game in games:
-            listbox.append(self._make_game_row(game))
+            row = self._make_game_row(game)
+            listbox.append(row)
+            if game.key == self.selected_key:
+                selected = row
+
+        # A rescan builds new rows for the same games, so the one that was
+        # selected before it is selected again — after installing a game, its
+        # row stays open and simply offers Launch where it offered Install.
+        # The game may also be gone by now (it was just removed), in which
+        # case nothing is selected and there is no place left to keep — and no
+        # selection changes, so _on_row_selected does not hear about it.
+        listbox.select_row(selected)
+        self.selected_key = self.row_keys.get(selected)
+        # Selecting it here was not a click on it: the next one is, and that
+        # click is the one that should put its buttons away again.
+        self.selection_just_changed = False
 
         clamp = Adw.Clamp(child=listbox)
         clamp.set_margin_top(18)
@@ -209,13 +239,24 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
 
         row.add_suffix(buttons)
         self.row_actions[row] = buttons
+        self.row_keys[row] = game.key
         return row
 
     # -- Selecting a game --------------------------------------------------
 
-    def _on_row_selected(self, _listbox, row):
-        """Show the selected row's buttons and put every other row's away."""
+    def _on_row_selected(self, listbox, row):
+        """Show the selected row's buttons and put every other row's away.
+
+        A list that a rescan has replaced signals one last time as it is torn
+        down, saying nothing is selected any more. That is not the user
+        changing their mind about a game, and the rows it speaks for are gone,
+        so only the list currently on screen is listened to.
+        """
+        if listbox is not self.library_list:
+            return
+
         self.selection_just_changed = True
+        self.selected_key = self.row_keys.get(row)  # None: nothing is selected
         for candidate, actions in self.row_actions.items():
             actions.set_visible(candidate is row)
 

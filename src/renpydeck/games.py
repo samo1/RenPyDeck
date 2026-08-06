@@ -98,6 +98,17 @@ class GameEntry:
     def sort_key(self) -> str:
         return self.name.casefold()
 
+    @property
+    def key(self) -> str:
+        """The game's identity, the same before and after it is installed.
+
+        An archive is keyed by its stem, which is what it extracts to, so the
+        archive and the folder it becomes agree on this. :func:`find_games`
+        merges the two folders on it, and the library holds a game's selection
+        across a rescan by it.
+        """
+        return _match_key(archive_stem(self.name) or self.name)
+
 
 def _list_dir(path: str) -> list[Path]:
     """List a folder's entries, tolerating a missing or unreadable path."""
@@ -205,16 +216,14 @@ def find_games(download_dir: str, game_dir: str) -> list[GameEntry]:
     entries: dict[str, GameEntry] = {}
 
     for entry in find_installed(game_dir):
-        entries[_match_key(entry.name)] = entry
+        entries[entry.key] = entry
 
     for entry in find_downloaded(download_dir):
-        # An archive is keyed by its stem, which is what it extracts to.
-        key = _match_key(archive_stem(entry.name) or entry.name)
-        installed = entries.get(key)
+        installed = entries.get(entry.key)
         if installed is not None:
             # Same game, already installed: keep the folder name as the title.
             installed.archive = entry.archive
         else:
-            entries[key] = entry
+            entries[entry.key] = entry
 
     return sorted(entries.values(), key=lambda entry: entry.sort_key)

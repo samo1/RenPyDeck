@@ -82,7 +82,10 @@ can launch are listed.
 In the library itself, a game is **selected before it is acted on**: rows carry just the
 name and the state until you pick one, and only the selected row shows its buttons. Picking
 another game moves them there; picking the same one again hides them. Nothing is selected
-when the library opens, or after an install, a launch or a removal has finished.
+when the library opens. Afterwards the game you picked **stays picked**: when an install or
+a launch has finished, its row is still the open one, now offering *Launch* where it offered
+*Install*. Only a game that is no longer there — one you have just removed — leaves the
+list with nothing selected.
 
 ### The game lifecycle
 

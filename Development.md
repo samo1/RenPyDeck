@@ -229,6 +229,16 @@ A few important real-world variations the installer must tolerate:
   moved, which cancels the row's pending click. Focus is deliberately parked on a header
   button whenever the list is rebuilt, because focus entering a single-selection list would
   otherwise select the first game on its own.
+- **The selection survives a rescan:** every scan builds a new list, but the game that was
+  selected is selected again in it, so installing a game leaves its row open with *Launch*
+  where *Install* used to be, rather than dropping the user back to a list with nothing
+  picked. Archive and installed folder are matched on the same normalised key the library
+  merges the two folders on (`GameEntry.key`), which is what lets a row keep its selection
+  through the rename from `Some_Game-1.0.zip` to `Some_Game-1.0`. A game that the rescan no
+  longer finds — it was just removed — simply leaves nothing selected. The list being
+  replaced emits one last `row-selected` for *nothing selected* as it is torn down, after
+  its successor has already been built; the handler ignores any list that is not the
+  current one, or that parting shot would hide the new row's buttons again.
 - **Subfolder guarantee:** Extraction always lands inside a subfolder of the Games folder
   (named after the archive). Files are never extracted loose, even if the archive already
   has its own top-level folder.
