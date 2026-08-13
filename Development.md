@@ -112,6 +112,10 @@ Under the hood the script runs the standard `flatpak` build steps:
 ```bash
 flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org.gnome.Platform 49
 # ... copy app files into build/flatpak-build/files ...
+flatpak build --socket=session-bus --talk-name=org.freedesktop.Flatpak build/flatpak-build \
+    appstreamcli compose --no-net --prefix=/app --origin=sk.meluzina.RenPyDeck \
+    --result-root=/ --data-dir=/app/share/app-info/xmls \
+    --icons-dir=/app/share/app-info/icons/flatpak /
 flatpak build-finish build/flatpak-build --command=renpydeck \
     --share=ipc --socket=wayland --socket=fallback-x11 --socket=pulseaudio \
     --device=dri --filesystem=xdg-download --filesystem=~/.renpy:create
@@ -130,6 +134,43 @@ To uninstall it again:
 
 ```bash
 flatpak uninstall --user sk.meluzina.RenPyDeck
+```
+
+### What a software store shows
+
+Everything KDE Discover (or GNOME Software) prints about the app — its name, author, icon
+and description — comes from `packaging/sk.meluzina.RenPyDeck.metainfo.xml`, but *not*
+directly: stores read the **catalog** form of that file, `share/app-info/xmls/<id>.xml.gz`
+with rasterised icons beside it, which is what the `appstreamcli compose` step above
+generates. `flatpak build-bundle` copies it into the bundle, so opening `RenPyDeck.flatpak`
+in Discover shows a proper entry rather than a nameless one. Skip the compose step and the
+bundle carries no store metadata at all: that is what made Discover call the author
+*unknown*.
+
+Two details of that step are easy to trip over. `appstreamcli` comes from the SDK, so
+nothing has to be installed on the host — but it decodes the icon through **glycin**, which
+isolates image loading in a sandbox of its own via `flatpak-spawn`, and that needs the
+session bus and the Flatpak portal (`--socket=session-bus --talk-name=org.freedesktop.Flatpak`).
+Without them the SVG fails to load and compose quietly produces an empty catalog.
+
+The author itself is the `<developer>` block:
+
+```xml
+<developer id="sk.meluzina">
+  <name>Samuel Valis</name>
+</developer>
+<developer_name>Samuel Valis</developer_name>
+```
+
+The `id` is a reverse-DNS name for the *developer*, not the app, and is what a store uses to
+group everything published under it; the name is the string shown as the author.
+`developer_name` is the pre-AppStream-1.0 spelling of the same name, kept for stores on
+older AppStream (SteamOS has lagged the desktop distributions here) — `appstreamcli
+validate` reports it as deprecated, which is expected rather than a problem. Check the file
+with:
+
+```bash
+appstreamcli validate packaging/sk.meluzina.RenPyDeck.metainfo.xml
 ```
 
 ## Rendering the Steam library artwork

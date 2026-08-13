@@ -59,6 +59,29 @@ install -Dm644 "$SCRIPT_DIR/$APP_ID.metainfo.xml" \
 install -Dm644 "$SCRIPT_DIR/$APP_ID.svg" \
     "$BUILD_DIR/files/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 
+echo ">> Composing AppStream catalog data (what software stores read)"
+# The metainfo file alone is not what a store sees. `flatpak build-export` and
+# `build-bundle` pick up the *catalog* form of it — files/share/app-info/xmls
+# plus the rasterised icons beside it — and only that is carried inside the
+# single-file bundle. Without this step KDE Discover has nothing to go on and
+# shows the app with no author, no description and no icon.
+#
+# appstreamcli lives in the SDK, so no host package is needed. It loads the
+# icon through glycin, which isolates image decoding in a sandbox of its own
+# via flatpak-spawn; that needs the session bus and the Flatpak portal, hence
+# the two extra options — without them the SVG fails to load and the catalog
+# comes out empty.
+flatpak build --socket=session-bus --talk-name=org.freedesktop.Flatpak \
+    "$BUILD_DIR" \
+    appstreamcli compose \
+        --no-net \
+        --prefix=/app \
+        --origin="$APP_ID" \
+        --result-root=/ \
+        --data-dir=/app/share/app-info/xmls \
+        --icons-dir=/app/share/app-info/icons/flatpak \
+        /
+
 echo ">> Finishing build (declaring sandbox permissions)"
 # The sound socket is for the games, not for RenPyDeck itself, which is silent:
 # a game started without it comes up mute ("PulseAudio: Unable to connect").

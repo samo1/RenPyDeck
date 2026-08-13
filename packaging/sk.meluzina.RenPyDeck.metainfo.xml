@@ -5,6 +5,16 @@
   <project_license>MIT</project_license>
   <name>RenPyDeck</name>
   <summary>Game manager and launcher for Ren'Py games on the Steam Deck</summary>
+  <!-- Who the software store credits as the author. Without it Discover says
+       "unknown author". The id is a reverse-DNS name for the developer (not
+       the app), so it stays the same across anything else published under it;
+       developer_name is the same name again for stores still reading the
+       pre-AppStream-1.0 tag. -->
+  <developer id="sk.meluzina">
+    <name>Samuel Valis</name>
+  </developer>
+  <developer_name>Samuel Valis</developer_name>
+  <update_contact>samuel.valis_AT_meluzina.sk</update_contact>
   <description>
     <p>
       RenPyDeck keeps your collection of downloaded Ren'Py games in one place and
@@ -12,9 +22,27 @@
       clean graphical interface. It is designed first and foremost for the Steam Deck.
     </p>
     <p>
-      This early release contains only the application shell with an on-screen Exit
-      button, used to verify that the application installs and launches on the Steam
-      Deck.
+      Downloaded archives and installed games appear in a single library. Select a
+      game and its buttons appear on that row: install it, launch it, or remove it.
+      RenPyDeck handles the fiddly parts — unpacking the archive into a subfolder of
+      its own and setting the executable bits Linux needs — so a game is ready to
+      play as soon as it is installed.
+    </p>
+    <ul>
+      <li>Installs from .zip, .rar, .7z and the .tar family of archives</li>
+      <li>Keeps the archive after installing, so a game can be reinstalled without
+      downloading it again — or deletes it to reclaim the space, if you prefer</li>
+      <li>Removes an installed game, its archive, or both, after asking which</li>
+      <li>Lists only games it can actually start: support is decided by what is
+      inside the archive, not by its filename, so Windows-only releases stay out
+      of the way</li>
+      <li>Download and games folders are yours to choose</li>
+    </ul>
+    <p>
+      Everything is built for the Deck's gaming mode, where windows have no
+      decorations and dialogs may never appear: RenPyDeck lives in one window with
+      an on-screen Exit button, asks its questions on pages inside it, scrolls by
+      finger, and is dark whether or not the desktop says so.
     </p>
   </description>
   <launchable type="desktop-id">sk.meluzina.RenPyDeck.desktop</launchable>
@@ -25,7 +53,10 @@
   <releases>
     <release version="0.1.0" date="2026-06-06">
       <description>
-        <p>Initial packaging milestone: application shell with an Exit button.</p>
+        <p>
+          The library, and the install, launch and remove actions on it, with the
+          download and games folders configurable from the app.
+        </p>
       </description>
     </release>
   </releases>
