@@ -59,6 +59,13 @@ install -Dm644 "$SCRIPT_DIR/$APP_ID.metainfo.xml" \
 install -Dm644 "$SCRIPT_DIR/$APP_ID.svg" \
     "$BUILD_DIR/files/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 
+# Licence text -> /app/share/licenses/<app-id>/LICENSE
+# The GPL asks for its terms to travel with the binary, and the bundle is the
+# only thing a user of the Deck receives; the store shows the name of the
+# licence from <project_license> in the metainfo, not this file.
+install -Dm644 "$PROJECT_ROOT/LICENSE" \
+    "$BUILD_DIR/files/share/licenses/$APP_ID/LICENSE"
+
 echo ">> Composing AppStream catalog data (what software stores read)"
 # The metainfo file alone is not what a store sees. `flatpak build-export` and
 # `build-bundle` pick up the *catalog* form of it — files/share/app-info/xmls

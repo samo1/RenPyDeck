@@ -52,6 +52,7 @@ RenPyDeck/
 │   └── sk.meluzina.RenPyDeck.svg          # application icon
 ├── download/        # Example download folder (downloaded game archives live here)
 ├── games/           # Example games folder (extracted/installed games live here)
+├── LICENSE          # GPL-3.0 text; also installed into the Flatpak
 ├── README.md        # What RenPyDeck is, and how to install and use it
 └── Development.md   # This file
 ```
@@ -161,6 +162,13 @@ The author itself is the `<developer>` block:
 </developer>
 <developer_name>Samuel Valis</developer_name>
 ```
+
+The licence a store shows is the SPDX id in `<project_license>` (`GPL-3.0-or-later`) — not
+the `LICENSE` file, which stores never read. The file is nevertheless installed into the
+bundle at `/app/share/licenses/sk.meluzina.RenPyDeck/LICENSE`, because the GPL asks for its
+terms to be conveyed with the binary and the bundle is all a Deck user receives. Do not
+confuse `<project_license>` with `<metadata_license>` above it: the latter covers the
+metainfo file itself, not the program.
 
 The `id` is a reverse-DNS name for the *developer*, not the app, and is what a store uses to
 group everything published under it; the name is the string shown as the author.

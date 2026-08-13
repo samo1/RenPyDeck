@@ -303,3 +303,19 @@ RenPyDeck's intended, complete feature set. Core goals:
 - [x] Handle both `lib/py3-linux-*` and older `lib/linux-*` runtime layouts
 - [x] On-screen Exit button for Steam Deck
 - [x] Single-file Flatpak distribution
+
+---
+
+## License
+
+RenPyDeck is free software: you can redistribute it and/or modify it under the terms of the
+**GNU General Public License** as published by the Free Software Foundation, either version
+3 of the License, or (at your option) any later version.
+
+It is distributed in the hope that it will be useful, but **without any warranty** — without
+even the implied warranty of merchantability or fitness for a particular purpose. See the
+[LICENSE](LICENSE) file for the full text, which also travels inside the Flatpak at
+`/app/share/licenses/sk.meluzina.RenPyDeck/LICENSE`.
+
+The licence covers RenPyDeck itself. The games it installs are not part of it and keep
+whatever terms their own authors set.

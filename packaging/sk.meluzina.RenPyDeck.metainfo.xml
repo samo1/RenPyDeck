@@ -2,7 +2,11 @@
 <component type="desktop-application">
   <id>sk.meluzina.RenPyDeck</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>MIT</project_license>
+  <!-- The SPDX id of the licence the program itself is under; this is what a
+       software store shows. The text of it is LICENSE in the repository, and
+       ships inside the Flatpak at /app/share/licenses/sk.meluzina.RenPyDeck/.
+       metadata_license above covers only this metadata file. -->
+  <project_license>GPL-3.0-or-later</project_license>
   <name>RenPyDeck</name>
   <summary>Game manager and launcher for Ren'Py games on the Steam Deck</summary>
   <!-- Who the software store credits as the author. Without it Discover says
