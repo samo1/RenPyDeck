@@ -44,8 +44,12 @@ RenPyDeck/
 │       ├── patcher.py              #   workarounds for known defects in games
 │       ├── remover.py              #   deleting a game's files
 │       └── touchscroll.py          #   drag/flick scrolling for the touchscreen
+├── .github/workflows/
+│   └── release.yml                 # manual release: tag, GitHub release, Flatpak repo
 ├── packaging/
-│   ├── build-flatpak.sh            # builds the single-file Flatpak bundle
+│   ├── build-flatpak.sh            # builds the Flatpak repository and single-file bundle
+│   ├── make-site.sh                # lays out the published Flatpak repository website
+│   ├── set-version.py              # writes a release's version into the sources
 │   ├── steam-assets.sh             # renders the Steam library artwork
 │   ├── renpydeck.sh                # in-sandbox launcher (sets PYTHONPATH)
 │   ├── sk.meluzina.RenPyDeck.desktop      # desktop entry
@@ -100,13 +104,15 @@ The whole bundle is produced by a single script:
 This writes the single-file bundle to **`dist/RenPyDeck.flatpak`** — the one file you copy
 to the Steam Deck.
 
-**Prerequisites** (one-time): the matching GNOME **Platform** and **SDK**. The script builds
-with plain `flatpak` (no `flatpak-builder` needed):
+**Prerequisites** (one-time): the matching GNOME **Platform** and **SDK**, and AppStream's
+**compose** addon on the host. The script builds with plain `flatpak` (no `flatpak-builder`
+needed):
 
 ```bash
 flatpak remote-add --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49
+sudo dnf install appstream-compose      # Debian/Ubuntu: sudo apt install appstream-compose
 ```
 
 Under the hood the script runs the standard `flatpak` build steps:
@@ -114,15 +120,18 @@ Under the hood the script runs the standard `flatpak` build steps:
 ```bash
 flatpak build-init   build/flatpak-build sk.meluzina.RenPyDeck org.gnome.Sdk org.gnome.Platform 49
 # ... copy app files into build/flatpak-build/files ...
-flatpak build --socket=session-bus --talk-name=org.freedesktop.Flatpak build/flatpak-build \
-    appstreamcli compose --no-net --prefix=/app --origin=sk.meluzina.RenPyDeck \
-    --result-root=/ --data-dir=/app/share/app-info/xmls \
-    --icons-dir=/app/share/app-info/icons/flatpak /
+appstreamcli compose --no-net --prefix=/ --origin=sk.meluzina.RenPyDeck \
+    --result-root=build/flatpak-build/files \
+    --data-dir=build/flatpak-build/files/share/app-info/xmls \
+    --icons-dir=build/flatpak-build/files/share/app-info/icons/flatpak \
+    build/flatpak-build/files
 flatpak build-finish build/flatpak-build --command=renpydeck \
     --share=ipc --socket=wayland --socket=fallback-x11 --socket=pulseaudio \
     --device=dri --filesystem=xdg-download --filesystem=~/.renpy:create
 flatpak build-export build/flatpak-repo build/flatpak-build stable
-flatpak build-bundle build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
+flatpak build-update-repo --title=RenPyDeck --default-branch=stable … build/flatpak-repo
+flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+    build/flatpak-repo dist/RenPyDeck.flatpak sk.meluzina.RenPyDeck stable
 ```
 
 **Install and run the bundle** (locally to test, or on the Steam Deck after copying the file):
@@ -149,11 +158,13 @@ in Discover shows a proper entry rather than a nameless one. Skip the compose st
 bundle carries no store metadata at all: that is what made Discover call the author
 *unknown*.
 
-Two details of that step are easy to trip over. `appstreamcli` comes from the SDK, so
-nothing has to be installed on the host — but it decodes the icon through **glycin**, which
-isolates image loading in a sandbox of its own via `flatpak-spawn`, and that needs the
-session bus and the Flatpak portal (`--socket=session-bus --talk-name=org.freedesktop.Flatpak`).
-Without them the SVG fails to load and compose quietly produces an empty catalog.
+The compose step runs on the **host**, against the build's files, the way `flatpak-builder`
+does it — not inside `flatpak build` with the SDK's copy of `appstreamcli`. `appstreamcli`
+decodes the icon through **glycin**, which isolates image loading in a sandbox of its own.
+On the host that is plain bubblewrap; inside a Flatpak sandbox glycin has to ask the Flatpak
+portal instead, which only works in a full desktop session. In CI the loader fails with
+"app/… not installed", the SVG cannot be read, and compose reports `file-read-error` and
+produces an empty catalog.
 
 The author itself is the `<developer>` block:
 
@@ -181,6 +192,87 @@ with:
 ```bash
 appstreamcli validate packaging/sk.meluzina.RenPyDeck.metainfo.xml
 ```
+
+## Releasing
+
+Releases are made by the **Release** workflow (`.github/workflows/release.yml`), started by
+hand from the repository's *Actions* tab with the version to release:
+
+```bash
+gh workflow run release.yml -f version=0.2.0
+```
+
+It runs in a privileged Fedora 43 container: `flatpak build` and glycin both need
+bubblewrap to create namespaces. In order, it:
+
+1. refuses a version that is not `MAJOR.MINOR.PATCH`, or whose `v<version>` tag already
+   exists;
+2. writes the version into `src/renpydeck/__init__.py` and adds a `<release>` to the
+   metainfo with `packaging/set-version.py`. A `<release>` entry for the version that is
+   already there, with release notes written by hand, is kept as it is. A version older
+   than the newest release in the metainfo is refused;
+3. builds the Flatpak signed with the repository key, then lays out the repository website
+   with `packaging/make-site.sh`;
+4. commits the version change to `main`, tags it `v<version>`, and pushes both together;
+5. creates the GitHub release, with notes generated from the commits and
+   `RenPyDeck-<version>.flatpak` attached;
+6. deploys the website to GitHub Pages.
+
+Everything that can fail on bad input happens before step 4, so a failed run leaves nothing
+behind. If a later step fails, finish it by hand: the tag already exists, so rerunning the
+workflow for the same version is refused.
+
+### The Flatpak repository
+
+The website at `https://samo1.github.io/RenPyDeck/` serves:
+
+| Path | What it is |
+| --- | --- |
+| `repo/` | the Flatpak (OSTree) repository |
+| `renpydeck.flatpakrepo` | adds the repository as a source (opened in Discover, it offers to add it) |
+| `sk.meluzina.RenPyDeck.flatpakref` | installs the app and adds the source in one step |
+| `index.html` | a landing page linking the two |
+
+The repository is **rebuilt from scratch for every release** and holds only the latest
+version. A client updates from whatever commit it has installed, so no history has to be
+stored anywhere. The single-file bundle records the repository's URL and key
+(`build-bundle --repo-url --gpg-keys`), so an install from the bundle is updated from the
+repository as well, under a remote named `renpydeck-origin`. The bundle also names Flathub
+as the place to get the GNOME runtime from (`--runtime-repo`).
+
+The repository is **GPG-signed**, because Flatpak, and so Discover, will not add an unsigned
+remote without extra flags. Both `.flatpakrepo` and `.flatpakref` carry the public key
+inline. The private key exists only as the `FLATPAK_GPG_PRIVATE_KEY` repository secret, plus
+any backup you keep. Losing it means every user has to remove and re-add the source, because
+releases signed with a new key fail verification against the old one.
+
+To build a signed release locally, for example to test the repository, set the same two
+variables the workflow sets, then serve `site/` over HTTP:
+
+```bash
+RENPYDECK_GPG_KEY=<key id> RENPYDECK_REPO_URL=http://localhost:8000/repo/ \
+    ./packaging/build-flatpak.sh
+RENPYDECK_GPG_KEY=<key id> ./packaging/make-site.sh site http://localhost:8000/
+python3 -m http.server --directory site
+```
+
+### One-time setup
+
+- **Signing key:** a dedicated key without a passphrase, stored as the secret:
+
+  ```bash
+  export GNUPGHOME=$(mktemp -d)
+  gpg --batch --pinentry-mode loopback --passphrase '' \
+      --quick-gen-key "RenPyDeck Flatpak repository <samuel.valis@meluzina.sk>" ed25519 sign never
+  gpg --armor --export-secret-keys | gh secret set FLATPAK_GPG_PRIVATE_KEY
+  gpg --armor --export-secret-keys > renpydeck-flatpak-key.asc   # back this up somewhere safe
+  ```
+
+- **GitHub Pages**, served by Actions rather than from a branch:
+
+  ```bash
+  gh api -X POST repos/samo1/RenPyDeck/pages -f build_type=workflow
+  ```
 
 ## Rendering the Steam library artwork
 

@@ -63,7 +63,8 @@ and removed either way.*
 - **Tidy installs** — every game is always extracted into its own subfolder, even when the
   archive doesn't contain a top-level folder of its own, and even when the launch script
   is buried a level or two down.
-- **Distributed as a single-file Flatpak bundle** — easy to install and run on the Steam Deck.
+- **Distributed as a Flatpak** — from its own repository, so Discover on the Steam Deck
+  installs it and keeps it updated, or as a single-file bundle.
 
 ---
 
@@ -131,30 +132,39 @@ list with nothing selected.
 
 ### Installing RenPyDeck
 
-RenPyDeck ships as a **single-file Flatpak bundle** (`RenPyDeck.flatpak`). On any Linux
-machine it installs from a terminal:
+RenPyDeck is distributed as a **Flatpak**, from its own repository at
+<https://samo1.github.io/RenPyDeck/>. On any Linux machine it installs from a terminal:
 
 ```bash
-flatpak install RenPyDeck.flatpak
+flatpak install --user https://samo1.github.io/RenPyDeck/sk.meluzina.RenPyDeck.flatpakref
 ```
+
+This adds the repository as a source as well, so updates come with `flatpak update` or
+through your software center like any other app's. Every version is also attached to its
+[GitHub release](https://github.com/samo1/RenPyDeck/releases) as a single-file bundle,
+`RenPyDeck-<version>.flatpak`, for installing without the repository. An install from the
+bundle still receives updates from the repository.
 
 ### Installing it on the Steam Deck
 
 No terminal needed — do this in **Desktop Mode**:
 
-1. Copy `RenPyDeck.flatpak` onto the Deck (USB stick, network share, `scp`, however you
-   like).
-2. **Double-click the file** in the file manager (Dolphin). **Discover** opens showing
-   RenPyDeck.
-3. Click **Install from local bundle**. Discover pulls in the GNOME runtime the first time,
-   which takes a few minutes; after that RenPyDeck appears in the application menu.
+1. Open <https://samo1.github.io/RenPyDeck/> in a browser and click
+   **sk.meluzina.RenPyDeck.flatpakref**. Open the downloaded file, or double-click it in the
+   file manager (Dolphin), and **Discover** opens showing RenPyDeck.
+2. Click **Install**. Discover adds RenPyDeck's repository as a source and pulls in the
+   GNOME runtime the first time, which takes a few minutes. After that, RenPyDeck appears in
+   the application menu, and Discover offers its updates along with everything else's.
+
+To install from the single-file bundle instead, download `RenPyDeck-<version>.flatpak` from
+the releases page, double-click it, and choose **Install from local bundle**.
 
 To play from **Gaming Mode**, add it to your Steam library while still in Desktop Mode:
 
-4. In Steam, choose **Games → Add a Non-Steam Game to My Library…**. RenPyDeck is already in
+3. In Steam, choose **Games → Add a Non-Steam Game to My Library…**. RenPyDeck is already in
    the list of applications — the Flatpak installs a desktop entry, so there is nothing to
    browse for. Tick it and confirm with **Add Selected Programs**.
-5. Switch to Gaming Mode. RenPyDeck is under **Non-Steam** in your library.
+4. Switch to Gaming Mode. RenPyDeck is under **Non-Steam** in your library.
 
 #### Artwork for the Steam library
 
@@ -308,6 +318,7 @@ RenPyDeck's intended, complete feature set. Core goals:
 - [x] Handle both `lib/py3-linux-*` and older `lib/linux-*` runtime layouts
 - [x] On-screen Exit button for Steam Deck
 - [x] Single-file Flatpak distribution
+- [x] Flatpak repository with updates through Discover
 
 ---
 

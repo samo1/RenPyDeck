@@ -2,16 +2,45 @@
 #
 # Build a single-file Flatpak bundle (RenPyDeck.flatpak) for the Steam Deck.
 #
-# This uses plain `flatpak` (build-init / build / build-finish / build-export /
-# build-bundle) rather than flatpak-builder, so the only prerequisites are the
-# matching GNOME Platform and SDK:
+# This uses plain `flatpak` (build-init / build-finish / build-export /
+# build-bundle) rather than flatpak-builder. Prerequisites are the matching
+# GNOME Platform and SDK, and AppStream's compose addon on the host:
 #
 #   flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49
+#   sudo dnf install appstream-compose    # Debian/Ubuntu: appstream-compose too
 #
 # Output: dist/RenPyDeck.flatpak — copy this single file to the Steam Deck and
 # install it with:  flatpak install --user RenPyDeck.flatpak
+# The Flatpak repository it is bundled from is left in build/flatpak-repo.
+#
+# Two optional environment variables turn a local build into a release build
+# (see .github/workflows/release.yml):
+#
+#   RENPYDECK_GPG_KEY   GPG key id to sign the repository with (looked up in
+#                       $GNUPGHOME). Flatpak refuses to add an unsigned remote
+#                       without extra flags, so a published repository is
+#                       always signed.
+#   RENPYDECK_REPO_URL  URL the repository will be published at. The bundle
+#                       records it, together with the signing key, so an
+#                       install from the bundle receives updates from there.
+#                       Needs RENPYDECK_GPG_KEY.
 #
 set -euo pipefail
+
+if ! appstreamcli compose --help > /dev/null 2>&1; then
+    echo "appstreamcli compose is not available; install AppStream's compose addon" \
+        "(the appstream-compose package)" >&2
+    exit 1
+fi
+
+GPG_KEY="${RENPYDECK_GPG_KEY:-}"
+REPO_URL="${RENPYDECK_REPO_URL:-}"
+if [ -n "$REPO_URL" ] && [ -z "$GPG_KEY" ]; then
+    echo "RENPYDECK_REPO_URL needs RENPYDECK_GPG_KEY: a published repository must be signed" >&2
+    exit 1
+fi
+GPG_SIGN=()
+[ -n "$GPG_KEY" ] && GPG_SIGN=(--gpg-sign="$GPG_KEY")
 
 APP_ID="sk.meluzina.RenPyDeck"
 APP_BRANCH="stable"
@@ -73,21 +102,20 @@ echo ">> Composing AppStream catalog data (what software stores read)"
 # single-file bundle. Without this step KDE Discover has nothing to go on and
 # shows the app with no author, no description and no icon.
 #
-# appstreamcli lives in the SDK, so no host package is needed. It loads the
-# icon through glycin, which isolates image decoding in a sandbox of its own
-# via flatpak-spawn; that needs the session bus and the Flatpak portal, hence
-# the two extra options — without them the SVG fails to load and the catalog
-# comes out empty.
-flatpak build --socket=session-bus --talk-name=org.freedesktop.Flatpak \
-    "$BUILD_DIR" \
-    appstreamcli compose \
-        --no-net \
-        --prefix=/app \
-        --origin="$APP_ID" \
-        --result-root=/ \
-        --data-dir=/app/share/app-info/xmls \
-        --icons-dir=/app/share/app-info/icons/flatpak \
-        /
+# This runs on the host, against the build's files, the way flatpak-builder
+# does it. appstreamcli decodes the icon through glycin, which sandboxes image
+# loaders; inside a `flatpak build` sandbox it has to go through the Flatpak
+# portal for that, which fails outside a desktop session (on CI the SVG cannot
+# be read and the catalog comes out empty), while on the host it uses
+# bubblewrap directly.
+appstreamcli compose \
+    --no-net \
+    --prefix=/ \
+    --origin="$APP_ID" \
+    --result-root="$BUILD_DIR/files" \
+    --data-dir="$BUILD_DIR/files/share/app-info/xmls" \
+    --icons-dir="$BUILD_DIR/files/share/app-info/icons/flatpak" \
+    "$BUILD_DIR/files"
 
 echo ">> Finishing build (declaring sandbox permissions)"
 # The sound socket is for the games, not for RenPyDeck itself, which is silent:
@@ -110,10 +138,29 @@ flatpak build-finish "$BUILD_DIR" \
     --filesystem=~/.renpy:create
 
 echo ">> Exporting build to a local repo"
-flatpak build-export "$REPO_DIR" "$BUILD_DIR" "$APP_BRANCH"
+flatpak build-export "${GPG_SIGN[@]}" "$REPO_DIR" "$BUILD_DIR" "$APP_BRANCH"
+
+# The repository-wide metadata a client copies into its remote configuration
+# when the repository is added, and the signed summary that lists what is in
+# it. The appstream branch generated here is what Discover reads to show the
+# app before it is installed.
+flatpak build-update-repo "${GPG_SIGN[@]}" \
+    --title="RenPyDeck" \
+    --comment="Game manager and launcher for Ren'Py games on the Steam Deck" \
+    --homepage="https://github.com/samo1/RenPyDeck" \
+    --default-branch="$APP_BRANCH" \
+    "$REPO_DIR"
 
 echo ">> Creating single-file bundle: $BUNDLE"
-flatpak build-bundle "$REPO_DIR" "$BUNDLE" "$APP_ID" "$APP_BRANCH"
+# --runtime-repo lets installing the bundle fetch the GNOME runtime from
+# Flathub on its own when it is missing.
+BUNDLE_OPTIONS=(--runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo)
+if [ -n "$REPO_URL" ]; then
+    GPG_PUBLIC_KEY="$PROJECT_ROOT/build/signing-key.gpg"
+    gpg --export "$GPG_KEY" > "$GPG_PUBLIC_KEY"
+    BUNDLE_OPTIONS+=(--repo-url="$REPO_URL" --gpg-keys="$GPG_PUBLIC_KEY")
+fi
+flatpak build-bundle "${BUNDLE_OPTIONS[@]}" "$REPO_DIR" "$BUNDLE" "$APP_ID" "$APP_BRANCH"
 
 echo
 echo ">> Done."

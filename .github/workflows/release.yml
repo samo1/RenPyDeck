@@ -1,0 +1,124 @@
+# Release RenPyDeck: bump the version, build the Flatpak, tag the release,
+# attach the single-file bundle to a GitHub release and publish the Flatpak
+# repository on GitHub Pages.
+#
+# Run it by hand from the Actions tab (or `gh workflow run release.yml -f
+# version=X.Y.Z`). See "Releasing" in Development.md for the one-time setup it
+# relies on: the FLATPAK_GPG_PRIVATE_KEY secret and Pages served from Actions.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, MAJOR.MINOR.PATCH (e.g. 0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write # push the release commit and tag, create the release
+  pages: write # deploy the Flatpak repository
+  id-token: write # needed by actions/deploy-pages
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    # The same distribution the app is developed on. Privileged, because
+    # `flatpak build` and AppStream's icon decoding both sandbox themselves
+    # with bubblewrap, which needs to create namespaces.
+    container:
+      image: fedora:43
+      options: --privileged
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Install Flatpak and the GNOME SDK
+        run: |
+          dnf install -y flatpak appstream-compose gnupg2 python3 git gh
+          flatpak remote-add --user --if-not-exists flathub \
+              https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+              org.gnome.Platform//49 org.gnome.Sdk//49
+
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0 # the tags, to refuse a version that is already out
+
+      - name: Trust the checkout
+        # The workspace belongs to the runner's user, not to the container's
+        # root, and git refuses to work in a repository someone else owns.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Check the version
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$VERSION' is not of the form MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::v$VERSION has already been released"
+            exit 1
+          fi
+
+      - name: Set the version
+        run: python3 packaging/set-version.py "$VERSION"
+
+      - name: Find the Pages address
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Import the signing key
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$FLATPAK_GPG_PRIVATE_KEY" ]; then
+            echo "::error::The FLATPAK_GPG_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          printf '%s\n' "$FLATPAK_GPG_PRIVATE_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          echo "RENPYDECK_GPG_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Build the Flatpak
+        env:
+          RENPYDECK_REPO_URL: ${{ steps.pages.outputs.base_url }}/repo/
+        run: ./packaging/build-flatpak.sh
+
+      - name: Lay out the repository site
+        run: ./packaging/make-site.sh site "${{ steps.pages.outputs.base_url }}/"
+
+      - name: Commit and tag the release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Nothing to commit when the version was already set by hand.
+          git diff --quiet || git commit -am "release: $VERSION"
+          git tag -a "v$VERSION" -m "RenPyDeck $VERSION"
+          git push --atomic origin HEAD:main "v$VERSION"
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/RenPyDeck.flatpak "dist/RenPyDeck-$VERSION.flatpak"
+          gh release create "v$VERSION" "dist/RenPyDeck-$VERSION.flatpak" \
+              --verify-tag --title "RenPyDeck $VERSION" --generate-notes
+
+      - name: Upload the repository site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Publish the repository site
+        id: deploy
+        uses: actions/deploy-pages@v4

@@ -49,6 +49,8 @@
       finger, and is dark whether or not the desktop says so.
     </p>
   </description>
+  <url type="homepage">https://github.com/samo1/RenPyDeck</url>
+  <url type="bugtracker">https://github.com/samo1/RenPyDeck/issues</url>
   <launchable type="desktop-id">sk.meluzina.RenPyDeck.desktop</launchable>
   <categories>
     <category>Game</category>
