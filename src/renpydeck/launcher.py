@@ -13,10 +13,12 @@ until it returns.
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from .games import find_launch_script, has_engine_dir
 from .installer import fix_permissions
+from .patcher import apply_patches
 
 
 class LaunchError(Exception):
@@ -56,6 +58,12 @@ def run(game_dir: str | Path) -> int:
         # A game copied in by hand (rather than installed here) may never have
         # had its permissions fixed; do it now instead of failing.
         fix_permissions(Path(game_dir))
+
+    try:
+        apply_patches(script.parent)
+    except OSError as error:
+        # The game still runs without the workaround, just with its defect.
+        print(f"RenPyDeck: could not patch {script.parent}: {error}", file=sys.stderr)
 
     try:
         process = subprocess.Popen([str(script)], cwd=script.parent)

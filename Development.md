@@ -41,6 +41,7 @@ RenPyDeck/
 │       ├── games.py                #   scans both folders into the game list
 │       ├── installer.py            #   unpacking + permission fixing
 │       ├── launcher.py             #   running an installed game
+│       ├── patcher.py              #   workarounds for known defects in games
 │       ├── remover.py              #   deleting a game's files
 │       └── touchscroll.py          #   drag/flick scrolling for the touchscreen
 ├── packaging/
@@ -310,6 +311,10 @@ A few important real-world variations the installer must tolerate:
   through RenPyDeck) that never had its permissions fixed gets them fixed on the spot rather
   than failing to start. If the game exits with a non-zero status, RenPyDeck says so — the
   game's own output goes to the terminal RenPyDeck was started from.
+- **Known game defects are patched at launch:** just before a game starts, `patcher.py`
+  checks it against a list of known defects and drops a fix script into its `game/` folder,
+  leaving the game's own files untouched. How defects are recognised, how the fixes work,
+  and every individual patch are documented in the comments of `patcher.py` itself.
 - **Archives are kept unless asked otherwise:** `install.delete_archive` (off by default)
   decides whether a successful install hard-deletes the archive from the Download folder
   (no trash). Off, the normal state of an installed game is *installed and downloaded*, and
