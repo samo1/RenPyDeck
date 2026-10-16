@@ -11,10 +11,12 @@ Both are scanned and merged into a single, alphabetically sorted list of
 :class:`GameEntry` objects. A game that has been installed *and* still has its
 archive around shows up once, as a single entry that knows about both paths.
 
-This module also locates the **game root** inside an extracted game — the
-folder holding the ``renpy`` engine folder and the ``*.sh`` launch script next
-to it. Both installing (which refuses anything without that pair) and launching
-(which runs the script) need it.
+This module also locates the **game root** inside an extracted game. For a
+Ren'Py game that is the folder holding the ``renpy`` engine folder and the
+``*.sh`` launch script next to it; for an **HTML game** — a web page zipped up
+with its images and sounds, typically made with Twine — it is the folder
+holding the game's start page. Both installing (which refuses anything that is
+neither) and launching (which runs the script, or opens the page) need it.
 
 That same search decides which sub-folders of the game folder count as
 installed games at all: only a folder RenPyDeck could actually launch is
@@ -52,6 +54,10 @@ ARCHIVE_SUFFIXES = (
 #: for the library it also keeps the scan to a folder listing or two per game
 #: instead of a walk through its thousands of files.
 GAME_ROOT_DEPTH = 2
+
+#: Pages an HTML game may ship that are not the game itself. The start page is
+#: picked by position and size, and a read-me next to it must not win.
+_NOT_GAME_PAGES = ("readme", "license", "licence", "credits", "changelog", "copying")
 
 
 def archive_stem(filename: str) -> str | None:
@@ -135,7 +141,8 @@ def find_installed(game_dir: str) -> list[GameEntry]:
     """Return an entry for every *launchable* extracted game in the game folder.
 
     A sub-folder only counts as an installed game when it holds a Ren'Py game
-    with a Linux launch script (see :func:`find_launch_script`). Anything else
+    with a Linux launch script (see :func:`find_launch_script`) or an HTML
+    game (see :func:`find_web_page`). Anything else
     the folder happens to contain — a Windows-only release, an unrelated
     folder, the leftovers of an interrupted extraction — is passed over rather
     than listed with a *Launch* button that could not work.
@@ -144,7 +151,10 @@ def find_installed(game_dir: str) -> list[GameEntry]:
     for path in _list_dir(game_dir):
         if path.name.startswith(".") or not path.is_dir():
             continue
-        if find_launch_script(path, max_depth=GAME_ROOT_DEPTH) is None:
+        if (
+            find_launch_script(path, max_depth=GAME_ROOT_DEPTH) is None
+            and find_web_page(path, max_depth=GAME_ROOT_DEPTH) is None
+        ):
             continue
         entries.append(GameEntry(name=path.name, install_dir=path))
     return entries
@@ -209,6 +219,58 @@ def find_launch_script(root: Path, max_depth: int | None = None) -> Path | None:
                 return script
         return scripts[0]
     return None
+
+
+def find_web_page(root: Path, max_depth: int | None = None) -> Path | None:
+    """The start page of the HTML game under *root*, if it is one.
+
+    An HTML game is a folder of web content opened at one page — ``index.html``
+    by convention, though a Twine game is a single page named after the story
+    (``Taru_s Infernal Pledge.html``) with its media in folders beside it. The
+    shallowest page wins, ``index.html`` before any other at the same depth,
+    then the largest: a Twine page carries the whole story and dwarfs any other.
+
+    A Ren'Py game is never an HTML game, even a Windows-only one that ships a
+    read-me page, so anything with a ``renpy`` folder yields ``None``. Nor is
+    anything with a Windows program in it: RPG Maker, TyranoScript and other
+    NW.js or Electron games carry an ``index.html`` too, but they run on the
+    browser engine bundled into their ``.exe`` and lean on its extras (files,
+    windows, Node.js) that a plain web view lacks.
+    *max_depth* bounds the search as in :func:`_walk_engine_dirs`.
+    """
+    if has_engine_dir(root, max_depth):
+        return None
+
+    best = None
+    for dirpath, dirnames, filenames in os.walk(root):
+        directory = Path(dirpath)
+        depth = len(directory.relative_to(root).parts)
+        for name in filenames:
+            stem, _dot, suffix = name.lower().rpartition(".")
+            if suffix == "exe":
+                return None
+            if suffix not in ("html", "htm") or stem in _NOT_GAME_PAGES:
+                continue
+            page = directory / name
+            try:
+                size = page.stat().st_size
+            except OSError:
+                continue
+            rank = (depth, stem != "index", -size)
+            if best is None or rank < best[0]:
+                best = (rank, page)
+        if max_depth is not None and depth >= max_depth:
+            dirnames.clear()  # deep enough; do not descend any further
+    return best[1] if best is not None else None
+
+
+def has_windows_program(root: Path) -> bool:
+    """Whether anything under *root* is a Windows program (an ``.exe``)."""
+    return any(
+        name.lower().endswith(".exe")
+        for _dirpath, _dirnames, filenames in os.walk(root)
+        for name in filenames
+    )
 
 
 def find_games(download_dir: str, game_dir: str) -> list[GameEntry]:

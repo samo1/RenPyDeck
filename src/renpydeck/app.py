@@ -3,8 +3,9 @@
 The window opens on the **library** — a single alphabetically sorted list of
 every game RenPyDeck can see, whether it is still a downloaded archive or an
 already extracted (installed) game. Only games RenPyDeck could really start are
-listed as installed — a folder in the game folder that is not a Ren'Py game
-with a Linux launch script is left out (see :mod:`renpydeck.games`).
+listed as installed — a folder in the game folder that is neither a Ren'Py game
+with a Linux launch script nor an HTML game is left out (see
+:mod:`renpydeck.games`).
 
 The list is quiet until asked: a game shows its name and state, and picking it
 reveals the actions it allows — *Install* for an archive that is not installed
@@ -29,8 +30,9 @@ button to rely on.
 
 *Install* unpacks an archive into the game folder (see
 :mod:`renpydeck.installer`), keeping or deleting the archive as the
-configuration screen says; *Launch* runs an installed game (see
-:mod:`renpydeck.launcher`); and *Remove* deletes the installed game, its
+configuration screen says; *Launch* runs an installed Ren'Py game (see
+:mod:`renpydeck.launcher`) or plays an HTML game on a page of the window (see
+:mod:`renpydeck.webplayer`); and *Remove* deletes the installed game, its
 archive, or both for good (see :mod:`renpydeck.remover`), after asking which.
 All three work
 on a worker thread with
@@ -50,7 +52,7 @@ from gi.repository import Gtk, Gio, Adw, GLib  # noqa: E402
 from . import __version__
 from .config import Config
 from .folderchooser import FolderChooserPage
-from .games import GameEntry, find_games
+from .games import GameEntry, find_games, find_web_page
 from .installer import InstallError, install
 from .launcher import LaunchError, run
 from .remover import RemoveError, describe, remove
@@ -338,6 +340,11 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
         if self.busy or not game.is_installed:
             return
 
+        page = find_web_page(game.install_dir)
+        if page is not None:
+            self._play_web_game(game.install_dir, page)
+            return
+
         self._set_busy(True)
         button.set_label("Running…")
 
@@ -379,6 +386,21 @@ class RenPyDeckWindow(Adw.ApplicationWindow):
                 f"says why.",
             )
         return GLib.SOURCE_REMOVE
+
+    def _play_web_game(self, install_dir, page):
+        """Play an HTML game on a page of its own, in this window."""
+        try:
+            # Imported only now: loading WebKit takes a while, and most
+            # libraries hold no HTML game at all.
+            from .webplayer import WebGamePage
+        except (ImportError, ValueError) as error:
+            self._show_error(
+                "Could not run the game",
+                f"{install_dir.name} is an HTML game, and playing one needs "
+                f"WebKitGTK 6.0, which could not be loaded: {error}",
+            )
+            return
+        self.navigation.push(WebGamePage(install_dir, page, self._make_header()))
 
     # -- Removing ----------------------------------------------------------
 

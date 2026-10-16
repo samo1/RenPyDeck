@@ -1,15 +1,17 @@
 """Installing a downloaded game.
 
 Installing means: unpack the archive from the download folder into the game
-folder, check that it really is a Ren'Py game that runs on Linux, and fix up the
-file permissions such a game needs. Whether the archive is then thrown away is
+folder, check that it really is a game RenPyDeck can run — a Ren'Py game that
+runs on Linux, or an HTML game — and fix up the file permissions such a game
+needs. Whether the archive is then thrown away is
 the user's choice (see :mod:`renpydeck.config`); by default it is kept, so the
 game can be installed again without downloading it a second time.
 
-What is unpacked has to hold a ``renpy`` folder (the engine, which every game
-ships) with a ``*.sh`` launch script beside it (the Linux launcher). Anything
-else — a Windows-only release, or something that is not a Ren'Py game at all —
-is refused, and the archive is left where it was.
+What is unpacked has to hold either a ``renpy`` folder (the engine, which every
+Ren'Py game ships) with a ``*.sh`` launch script beside it (the Linux
+launcher), or — with no ``renpy`` folder anywhere — an HTML page to open as an
+HTML game. Anything else, a Windows-only Ren'Py release included, is refused,
+and the archive is left where it was.
 
 The extracted files always land in a **new folder named after the archive**
 (without its extension). Archives are inconsistent — some carry a top-level
@@ -36,7 +38,9 @@ from .games import (
     GAME_ROOT_DEPTH,
     archive_stem,
     find_launch_script,
+    find_web_page,
     has_engine_dir,
+    has_windows_program,
 )
 
 #: Extensions handled in-process by the standard library.
@@ -88,8 +92,8 @@ def install(
     """Install *archive* into *game_dir* and return the created folder.
 
     With *delete_archive* the archive file is deleted once the game is in
-    place. On failure — including an archive that turns out not to be a Linux
-    Ren'Py game — nothing is left behind and the archive is kept either way, so
+    place. On failure — including an archive that turns out to hold no game
+    RenPyDeck can run — nothing is left behind and the archive is kept either way, so
     the install can be retried or the game replaced.
     """
     archive = Path(archive)
@@ -225,40 +229,54 @@ def _clear(directory: Path) -> None:
 def find_game_root(root: Path, archive_name: str = "the archive") -> Path:
     """Return the game's root folder inside *root*, or raise `InstallError`.
 
-    The game root is the folder that holds both a ``renpy`` folder — every
-    Ren'Py game ships the engine, so its absence means this is not a Ren'Py
-    game at all — and a ``*.sh`` launch script right next to it. A Windows-only
+    For a Ren'Py game the root is the folder that holds both a ``renpy``
+    folder and a ``*.sh`` launch script right next to it; a Windows-only
     release has the engine folder but no script. See
     :func:`renpydeck.games.find_launch_script`, which does the searching.
+    Without a ``renpy`` folder anywhere, the archive may still be an HTML game,
+    whose root is the folder of its start page (see
+    :func:`renpydeck.games.find_web_page`) — unless it carries a Windows
+    program, which makes it a Windows game built on web pages instead.
 
     The root also has to be near the top: the library only looks that far when
     it scans installed games, so a game buried deeper would install and then
     not be listed. It is refused here instead.
     """
-    if not has_engine_dir(root):
-        raise InstallError(
-            f"{archive_name} does not contain a “renpy” folder, so it is not a "
-            f"Ren'Py game RenPyDeck can install."
-        )
+    # Both searched without a depth limit, so that a game which is merely
+    # buried too deep can be told apart from one that is not there at all.
+    if has_engine_dir(root):
+        script = find_launch_script(root)
+        if script is None:
+            raise InstallError(
+                f"{archive_name} has no Linux launch script (a “.sh” file) next "
+                f"to its “renpy” folder — it looks like a Windows-only release, "
+                f"which the Steam Deck cannot run."
+            )
+        game_root = script.parent
+    else:
+        page = find_web_page(root)
+        if page is None and has_windows_program(root):
+            raise InstallError(
+                f"{archive_name} holds a Windows program (an “.exe” file) but no "
+                f"Ren'Py game — it looks like a Windows-only release, which the "
+                f"Steam Deck cannot run."
+            )
+        if page is None:
+            raise InstallError(
+                f"{archive_name} holds neither a Ren'Py game (a “renpy” folder) "
+                f"nor an HTML game (an “.html” page), so RenPyDeck cannot "
+                f"install it."
+            )
+        game_root = page.parent
 
-    # Searched without a depth limit, so that a game which is merely buried too
-    # deep can be told apart from one with no Linux launcher at all.
-    script = find_launch_script(root)
-    if script is None:
-        raise InstallError(
-            f"{archive_name} has no Linux launch script (a “.sh” file) next to "
-            f"its “renpy” folder — it looks like a Windows-only release, which "
-            f"the Steam Deck cannot run."
-        )
-
-    depth = len(script.parent.relative_to(root).parts)
+    depth = len(game_root.relative_to(root).parts)
     if depth > GAME_ROOT_DEPTH:
         raise InstallError(
             f"{archive_name} keeps the game {depth} folders deep inside itself, "
             f"which is deeper than RenPyDeck looks. Repack it with the game "
             f"nearer the top, or unpack it into the game folder yourself."
         )
-    return script.parent
+    return game_root
 
 
 # -- Post-processing ------------------------------------------------------

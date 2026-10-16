@@ -1,8 +1,9 @@
 # RenPyDeck
 
-A game manager and launcher for **Ren'Py** games, designed first and foremost for the **Steam Deck**.
+A game manager and launcher for **Ren'Py** games — and for **HTML games**, such as those made
+with Twine — designed first and foremost for the **Steam Deck**.
 
-RenPyDeck keeps your collection of downloaded Ren'Py games in one place and turns the
+RenPyDeck keeps your collection of downloaded games in one place and turns the
 download → install → play → uninstall lifecycle into a few taps in a clean graphical
 interface. It handles the fiddly parts — unpacking archives into tidy subfolders and
 fixing up the file permissions Linux needs — so you can get straight to playing.
@@ -25,6 +26,9 @@ and removed either way.*
   about which game it belongs to.
 - **One-click install** — unpacks a downloaded archive into your games folder.
 - **One-click launch** — runs an installed game.
+- **HTML games too** — a game that is a web page zipped up with its pictures and music
+  (typically a Twine/SugarCube story) plays right inside RenPyDeck's window. No browser is
+  needed, and its saves are kept between sessions. See [Playing HTML games](#playing-html-games).
 - **One-click removal** — deletes an installed game, its archive, or both, after a
   confirmation prompt that asks which. Removing the game you have finished with can leave
   the archive in place, ready to install again.
@@ -49,9 +53,9 @@ and removed either way.*
   gaming mode delivers as ordinary pointer input rather than as touch events (so GTK's own
   kinetic scrolling never sees it). Taps still activate buttons.
 - **Linux-first** — support is decided by what's *inside* the archive, not by its
-  filename: a game is playable only if it ships a Linux launch script. Windows-only
-  games are detected and ignored, even when a "linux"-named archive isn't one (and vice
-  versa). The same check decides what the library shows as installed: only a folder
+  filename: a Ren'Py game is playable only if it ships a Linux launch script, and an HTML
+  game only if it comes without a Windows program. Windows-only games are detected and
+  ignored, even when a "linux"-named archive isn't one (and vice versa). The same check decides what the library shows as installed: only a folder
   RenPyDeck can actually start is listed, so whatever else lives in your Games folder
   stays out of the way.
 - **Automatic permission fixing** — sets the executable bit on the game's launch shell
@@ -109,16 +113,23 @@ list with nothing selected.
      archive after installing* on in the settings and it is deleted instead — a hard delete:
      the file does not go to the trash.
    - Support is decided by **content, not filename**, regardless of whether the archive is
-     named `-win`, `-pc`, `-linux` or anything else. What was unpacked must contain a
-     **`renpy` folder** (the engine — every Ren'Py game ships it) with a **`*.sh` launch
-     script beside it** (the Linux launcher). If either is missing the install is refused,
-     nothing is added to the Games folder, and the archive is kept.
+     named `-win`, `-pc`, `-linux` or anything else. What was unpacked must be one of:
+     - a **Ren'Py game**: a **`renpy` folder** (the engine — every Ren'Py game ships it)
+       with a **`*.sh` launch script beside it** (the Linux launcher);
+     - an **HTML game**: no `renpy` folder, an **`.html` page** to start from, and **no
+       `.exe` file** anywhere. Games made with RPG Maker, TyranoScript and other
+       NW.js-based tools also contain an `index.html`, but they are Windows programs built
+       around it and need the browser bundled into their `.exe`, so they are refused.
+
+     Anything else is refused: nothing is added to the Games folder, and the archive is
+     kept.
 3. **Play** — Choose **Launch** on an installed game. RenPyDeck runs the game's `*.sh`
    script from the game root — the folder holding `renpy` — with that folder as the working
    directory, which is what the script expects. A game with a known defect gets its fix
    added first (see *Fixes for known game defects* above). The game takes over in its own
    window; RenPyDeck waits behind it with its buttons disabled, so only one game runs at a
-   time.
+   time. An HTML game plays inside RenPyDeck's own window instead, until you press
+   **Quit game**.
 4. **Remove** — Choose **Remove** to delete a game from the library, and RenPyDeck asks
    before deleting anything. For a game that is installed *and* still has its archive, the
    question offers all three answers — **Remove game**, **Remove archive**, **Remove
@@ -219,6 +230,35 @@ Because the Steam Deck doesn't show window decorations by default, RenPyDeck inc
 on-screen **Exit** button. Use it to close the application — the usual
 close/minimise/maximise buttons are hidden, so Exit is how you leave.
 
+### Playing HTML games
+
+An HTML game is a web page with its pictures, music and fonts in folders beside it. Most
+come from **Twine**, and are often a single file named after the story (`Taru_s Infernal
+Pledge.html`) rather than `index.html`. RenPyDeck installs one like any other game. When you
+press **Launch**, it opens the game in a page of its own window, using the web engine that is
+already part of the Flatpak's runtime. You don't need a browser.
+
+- **Quit game** in the header bar closes the game and returns to the library. It is the only
+  way out: the back gesture, a swipe from the screen's edge and **Esc** are left to the
+  game, so a stray swipe on the touchscreen can't throw away your progress. Save first
+  — quitting doesn't ask.
+- **Saves are kept.** A game's saves (its browser storage) stay in RenPyDeck's own data
+  folder, `~/.var/app/sk.meluzina.RenPyDeck/data/renpydeck/web`. They survive quitting,
+  closing RenPyDeck, removing the game, and installing a newer version of it. A newer
+  version goes into a folder with a new name and still finds the old saves.
+- **The game stays offline.** Links that would leave the game, such as one to the author's
+  Patreon, are blocked, because in Gaming Mode there would be no browser to come back from.
+  Exporting a save to a file isn't supported yet.
+- **Controls:** these games are played with taps or a mouse. The touchscreen works as it is,
+  and so does the trackpad-as-mouse in the **Web Browser** controller template (see
+  [Controller setup for Gaming Mode](#controller-setup-for-gaming-mode)). The browser's
+  gamepad support is not available to the game.
+
+What isn't supported is a game that ships an `.exe`, even when it has an `index.html` inside.
+RPG Maker MV/MZ, TyranoScript and other NW.js or Electron games fall in this group. They are
+Windows programs that bundle their own browser and rely on parts of it a plain web page
+doesn't have, so RenPyDeck refuses to install them.
+
 ---
 
 ## Configuration
@@ -251,7 +291,9 @@ delete_archive = false
 | `folders.game` | Folder where games are extracted/installed. | `$XDG_DATA_HOME/renpydeck/games` (e.g. `~/.local/share/renpydeck/games`). |
 | `install.delete_archive` | Delete the archive once the game is installed. | `false` — the archive is kept, so the game can be installed again without downloading it. |
 
-Both folders are created on startup if they don't already exist. You can edit the file by
+Both folders are created on startup if they don't already exist. HTML games keep their saves
+in a folder of their own, `$XDG_DATA_HOME/renpydeck/web`
+(see [Playing HTML games](#playing-html-games)); there is nothing to configure about it. You can edit the file by
 hand, but it's easier to use the in-app configuration screen. A missing or unreadable
 `delete_archive` value counts as `false`, the setting that deletes nothing.
 
@@ -268,6 +310,9 @@ sharing it is what makes a game play the same whether you start it here or strai
 the file manager: the same saves are there, and the game does not warn that a save was
 "created on another computer". Without it the sandbox would hand each game an empty, throwaway
 home — saves would disappear when RenPyDeck closes.
+
+HTML games need no permission of their own: the web engine they play in comes with the
+GNOME runtime, and their saves go to the app's own data directory.
 
 The last permission is **sound** (`--socket=pulseaudio`, which is also what PipeWire serves
 on SteamOS). RenPyDeck is silent itself; a game started without it would play mute.
@@ -300,25 +345,6 @@ location so an installed game's archive can be deleted.
 The internals live in **[Development.md](Development.md)**: the tech stack, the project
 layout, running RenPyDeck from source, building the Flatpak bundle, the anatomy of a Ren'Py
 game, and the behaviours the implementation depends on.
-
----
-
-## Roadmap / status
-
-RenPyDeck's intended, complete feature set. Core goals:
-
-- [x] Configurable download and games folders
-- [x] List downloaded and installed games
-- [x] Install (unpack), run, and uninstall games
-- [x] Support multiple archive formats (`.zip`, `.tar.bz2`, `.rar`, …)
-- [x] Always extract into a per-game subfolder
-- [x] Locate the launch script even when nested or named with spaces
-- [x] Fix executable permissions for the launch script and the Linux `lib` runtime
-- [x] Detect support by content (Linux `.sh`), not by archive filename
-- [x] Handle both `lib/py3-linux-*` and older `lib/linux-*` runtime layouts
-- [x] On-screen Exit button for Steam Deck
-- [x] Single-file Flatpak distribution
-- [x] Flatpak repository with updates through Discover
 
 ---
 

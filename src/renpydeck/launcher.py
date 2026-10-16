@@ -1,4 +1,7 @@
-"""Running an installed game.
+"""Running an installed Ren'Py game.
+
+HTML games are not run from here: they play inside RenPyDeck's own window (see
+:mod:`renpydeck.webplayer`).
 
 A Ren'Py game is started through the ``*.sh`` script that sits next to its
 ``renpy`` folder. The script resolves the platform at runtime and execs the
@@ -41,8 +44,8 @@ def find_script(game_dir: str | Path) -> Path:
             f"its “renpy” folder, so it cannot be started here."
         )
     raise LaunchError(
-        f"{root.name} does not look like a Ren'Py game: it has no “renpy” "
-        f"folder."
+        f"{root.name} does not look like a game: it has neither a “renpy” "
+        f"folder nor an HTML page."
     )
 
 

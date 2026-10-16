@@ -19,6 +19,12 @@ For what RenPyDeck does and how to install and use it, see [README.md](README.md
   notes under [Features](README.md#features)).
 - **Packaging:** A single-file **Flatpak bundle** built on the **GNOME 49 runtime** (which
   already ships Python 3 + GTK 4 + PyGObject, so no extra dependencies are bundled).
+- **HTML games:** played in a **WebKitGTK 6.0** web view (`gi.require_version("WebKit",
+  "6.0")`), which the GNOME runtime also ships (2.54 in GNOME 49), together with the WebKit
+  subprocess sandbox that works inside Flatpak. Supporting HTML games adds nothing to the
+  bundle but `webplayer.py`. Running from source needs the host's WebKitGTK 6.0
+  (`webkitgtk6.0` on Fedora, `gir1.2-webkit-6.0` on Debian/Ubuntu); without it everything
+  but playing an HTML game still works.
 - **Unpacking:** zip and tar archives are handled by the Python standard library. Formats it
   cannot read (`.rar`, `.7z`) are passed to external extractors — **`bsdtar`** (part of the
   GNOME runtime, and able to read both), then `7z`/`7zz`/`7za`, `unar` and `unrar` when
@@ -40,10 +46,11 @@ RenPyDeck/
 │       ├── folderchooser.py        #   in-window folder browser (no portal)
 │       ├── games.py                #   scans both folders into the game list
 │       ├── installer.py            #   unpacking + permission fixing
-│       ├── launcher.py             #   running an installed game
+│       ├── launcher.py             #   running an installed Ren'Py game
 │       ├── patcher.py              #   workarounds for known defects in games
 │       ├── remover.py              #   deleting a game's files
-│       └── touchscroll.py          #   drag/flick scrolling for the touchscreen
+│       ├── touchscroll.py          #   drag/flick scrolling for the touchscreen
+│       └── webplayer.py            #   playing an HTML game in a WebKit view
 ├── .github/workflows/
 │   └── release.yml                 # manual release: tag, GitHub release, Flatpak repo
 ├── packaging/
@@ -347,6 +354,39 @@ A few important real-world variations the installer must tolerate:
   or a folder with spaces (e.g. `Rent a Boyfriend Demo/RentaBoyfriend.sh`). Locate it by
   searching, don't assume a fixed depth.
 
+## Anatomy of an HTML game
+
+An HTML game is a web page that opens in a browser, zipped up with the media it loads.
+RenPyDeck's examples are **Twine** stories in the **SugarCube** story format:
+
+```
+<GameName>/
+├── <Story Name>.html    # the whole story: engine, script and styles in one page
+├── img/                 # pictures, loaded by relative URL
+├── music/               # .ogg / .mp3, played through <audio>
+└── fonts/               # .woff, loaded from the page's CSS
+```
+
+Things the code depends on:
+
+- **The start page is rarely `index.html`.** Twine names the page after the story, spaces
+  and all (`Fucksome road.html`), and it may sit inside a wrapper folder (`FSR 0.32/`).
+  `games.find_web_page` searches the same two levels as the Ren'Py search. It skips
+  read-me, licence and credits pages and ranks the rest by depth, then `index.html` first,
+  then size: a Twine page holds the whole story and is by far the largest.
+- **Saves live in `localStorage`.** SugarCube keys its saves by the story, not by the page's
+  address, so they need a storage origin that stays the same across versions of a game.
+- **Assets are loaded by relative URL**, sometimes with `fetch`/`XMLHttpRequest`, which
+  WebKit refuses on `file://`. That is why games are served through a scheme of their own
+  (see below).
+- **A Windows program next to an `index.html` is not an HTML game.** RPG Maker MV/MZ
+  (`data/*.json`, `js/`), TyranoScript and other engines ship their games as **NW.js** or
+  Electron apps: an `index.html` plus a `.exe` that wraps a Chromium build (`nw.dll`,
+  `nw.pak`, `package.json`). They depend on what that bundled runtime adds to a browser:
+  Node.js `require`, file-system saves, window control. Any `.exe` in the tree therefore
+  disqualifies a folder, and a `renpy` folder does too, so a Windows-only Ren'Py release
+  that ships a read-me page is never mistaken for an HTML game.
+
 ## Key behaviors to be aware of
 
 - **Linux-only support:** A game is installable only if its unpacked tree contains a `renpy`
@@ -357,9 +397,13 @@ A few important real-world variations the installer must tolerate:
   Detection is content-based, not filename-based, so Windows-only payloads are refused
   however the archive is named. Note that older games also carry `renpy` folders deep inside
   `lib/.../python2.7/` — those have no launch script beside them and are correctly skipped.
-- **Only launchable installs are listed:** the same `renpy` + `*.sh` search runs over each
-  sub-folder of the Games folder, and one without a launch script never appears in the
-  library — no *Launch* button that could not work, and no rows for folders that are not
+  The one alternative is an **HTML game**: no `renpy` folder anywhere, no `.exe` anywhere,
+  and an `.html` start page within the same two levels (see
+  [Anatomy of an HTML game](#anatomy-of-an-html-game)). An archive with an `.exe` and no
+  Ren'Py game is refused as a Windows-only release.
+- **Only launchable installs are listed:** the same `renpy` + `*.sh` search, and failing
+  that the HTML start page search, runs over each sub-folder of the Games folder, and one
+  with neither never appears in the library — no *Launch* button that could not work, and no rows for folders that are not
   games. The search stops at the first game root it finds, so listing the library costs
   about one folder listing per game rather than a walk through every game's thousands of
   files. Archives are deliberately *not* opened for the same check: an unsupported one is
@@ -403,6 +447,39 @@ A few important real-world variations the installer must tolerate:
   through RenPyDeck) that never had its permissions fixed gets them fixed on the spot rather
   than failing to start. If the game exits with a non-zero status, RenPyDeck says so — the
   game's own output goes to the terminal RenPyDeck was started from.
+- **HTML games play in the window, not beside it:** *Launch* on an HTML game pushes a
+  `WebGamePage` onto the window's `Adw.NavigationView` instead of starting a process. The
+  library isn't marked busy, because it is not on screen while the game is. `webplayer` is
+  imported only on the first such launch, because loading WebKit is slow and most libraries
+  never need it. A missing WebKit becomes an error page rather than a crash.
+- **HTML games are served, not opened from `file://`:** the page is loaded from
+  `renpydeck-game://local/<install folder>/<page>`. A handler registered on the default
+  `WebKit.WebContext` answers requests from the game folder. It percent-decodes the path,
+  resolves symlinks, and serves only files inside the game being played; everything else
+  gets a 404. The scheme is registered as secure and CORS-enabled, so `fetch` of the game's
+  own files works. MIME types come from a table of web types, because the shared MIME
+  database answers names such as `audio/x-vorbis+ogg` that pages don't check for. A scheme
+  can be registered only once per context, before the first web view, so `_GameServer` is a
+  process-wide singleton that each game points at its own folder.
+- **One origin, persistent storage:** all games share the origin `renpydeck-game://local`,
+  and a single `WebKit.NetworkSession` keeps website data in
+  `$XDG_DATA_HOME/renpydeck/web` (cache in `$XDG_CACHE_HOME/renpydeck/web`). A new
+  version installs under a new folder name, and only a shared origin lets it find the old
+  version's `localStorage` saves. Story formats key saves by story, so games don't collide.
+  Removing a game leaves its saves alone, just as `~/.renpy` is left alone for Ren'Py
+  games.
+- **The game cannot leave itself:** `decide-policy` ignores any navigation to an address
+  outside the game scheme (`about:`, `data:` and `blob:` are allowed), every new-window
+  request, and every response the view can't display (downloads such as a save export).
+  The context menu is suppressed because WebKit shows it as a popover, which gaming mode
+  may not display. Autoplay is allowed, since games start their music before the first
+  click.
+- **Only *Quit game* ends a game:** the page is created with `can-pop` off. That hides the
+  back button and disables the edge swipe, the Escape shortcut and `navigation.pop`. A
+  game uses Escape itself, and a stray swipe on the Deck's touchscreen would discard
+  unsaved progress. *Quit game* turns `can-pop` back on and pops the page. On `hidden`,
+  the view loads `about:blank`, which runs the game's unload handlers and stops its audio
+  right away rather than when the page is finalized.
 - **Known game defects are patched at launch:** just before a game starts, `patcher.py`
   checks it against a list of known defects and drops a fix script into its `game/` folder,
   leaving the game's own files untouched. How defects are recognised, how the fixes work,
@@ -448,3 +525,7 @@ must handle. They map archive → extracted result:
 | `Mythos-1.1.0.0-market.zip` | zip | `Mythos-1.1.0.0-market/` | Ships Linux, Windows *and* macOS (`.app`) payloads |
 | `NetorareWifeMisumi-LustfulAwakening-1.0.1-win.zip` | zip | `NetorareWifeMisumi-LustfulAwakening-1.0.1-win/` | `-win` name, but supported — older `lib/linux-x86_64` layout |
 | `Rent_a_Boyfriend_Prologue.rar` | rar | `Rent_a_Boyfriend_Prologue/Rent a Boyfriend Demo/` | RAR archive; nested folder name contains spaces |
+| `TarusInfernalPledge-v0_11_0.zip` | zip | `TarusInfernalPledge-v0_11_0/` | HTML game (SugarCube 2.36); start page `Taru_s Infernal Pledge.html` at the top |
+| `Fucksome_Road_0.32.zip` | zip | `Fucksome_Road_0.32/FSR 0.32/` | HTML game (SugarCube 2.37); page nested in a folder with a space in its name |
+| `ButterflyAffectionTL.zip` | zip | — (refused) | TyranoScript on NW.js: `index.html` beside `ButterflyAffection.exe` |
+| `Red Room 95 v1.3.1.zip` | zip | — (refused) | RPG Maker on NW.js: `index.html` and `credits.html` beside `Red Room 95.exe` |
