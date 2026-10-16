@@ -35,7 +35,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("WebKit", "6.0")
 
-from gi.repository import Adw, Gio, GLib, Gtk, WebKit  # noqa: E402
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, WebKit  # noqa: E402
 
 SCHEME = "renpydeck-game"
 _HOST = "local"
@@ -190,6 +190,7 @@ class WebGamePage(Adw.NavigationPage):
         self.view.connect("decide-policy", self._on_decide_policy)
         # WebKit's context menu is a popover, which gaming mode may not show.
         self.view.connect("context-menu", lambda *_: True)
+        self.view.connect("query-tooltip", self._on_query_tooltip)
         self.view.connect("notify::title", self._on_title_changed)
 
         toolbar_view = Adw.ToolbarView()
@@ -216,6 +217,20 @@ class WebGamePage(Adw.NavigationPage):
         title = view.get_title()
         if title and not title.startswith("about:"):
             self.set_title(title)
+
+    @staticmethod
+    def _on_query_tooltip(view, *_args):
+        """Never show a tooltip for the page.
+
+        WebKit turns an element's ``title`` (SugarCube puts one on its UI bar
+        buttons) into a GTK tooltip, a pop-up window of its own. The Deck's
+        gaming mode sizes it to nothing, and once one has been shown, closing
+        RenPyDeck crashes the session's X server, taking Steam down with it.
+        The handler runs before WebKit's own, so stopping the emission here is
+        what keeps the tooltip from being shown at all.
+        """
+        GObject.signal_stop_emission_by_name(view, "query-tooltip")
+        return False
 
     def _on_decide_policy(self, _view, decision, decision_type):
         """Keep the game from leaving itself; see the module documentation."""

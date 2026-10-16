@@ -472,7 +472,18 @@ Things the code depends on:
   outside the game scheme (`about:`, `data:` and `blob:` are allowed), every new-window
   request, and every response the view can't display (downloads such as a save export).
   The context menu is suppressed because WebKit shows it as a popover, which gaming mode
-  may not display. Autoplay is allowed, since games start their music before the first
+  may not display.
+- **No tooltips from the page:** WebKit turns an element's `title` into a GTK tooltip, and
+  SugarCube puts titles on its UI-bar buttons. A GTK tooltip is a pop-up X window of its
+  own, and gamescope gives it no size (`gtk_widget_size_allocate(): attempt to allocate
+  GtkBox box … with width -21 and height -13`). Once one has been shown, RenPyDeck's exit
+  segfaults gamescope's Xwayland, which takes down gamescope and restarts the Steam session
+  into its login screen. The view's `query-tooltip` handler stops the signal before WebKit's
+  own handler runs, so no tooltip is ever shown.
+
+  To reproduce under nested gamescope, hover the pointer over a SugarCube button with
+  `xdotool mousemove --window`, then press *Exit*. Committed code crashed Xwayland in 4 of
+  5 runs, the fixed code in none. Autoplay is allowed, since games start their music before the first
   click.
 - **Only *Quit game* ends a game:** the page is created with `can-pop` off. That hides the
   back button and disables the edge swipe, the Escape shortcut and `navigation.pop`. A
