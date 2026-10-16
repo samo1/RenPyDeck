@@ -58,26 +58,8 @@ class Patch:
         return f"{PATCH_PREFIX}{self.name}.rpy"
 
 
-PATCHES = (
-    # A note-taking panel the developer of "Much Bigger Than my Boyfriend" uses
-    # to mark broken images and sounds while testing, shown from `label start`.
-    # Its text input is always focused and sits above everything else, so it
-    # takes every typed key — Shift+A types an "A" into the note instead of
-    # opening Ren'Py's accessibility menu. It is part of the developer's own
-    # `ADDON_*` toolkit, so their other games may carry it too.
-    Patch(
-        name="notes_panel",
-        marker="ADD_write_errors",
-        script=(
-            "# Added by RenPyDeck. The game ships with its developer's notes\n"
-            "# panel switched on; its text input swallows keyboard shortcuts\n"
-            "# such as Shift+A. This replaces the panel with nothing.\n"
-            "init 999:\n"
-            "    screen notes_screen():\n"
-            "        pass\n"
-        ),
-    ),
-)
+#: Every known defect. None are listed at the moment.
+PATCHES: tuple[Patch, ...] = ()
 
 
 def apply_patches(game_root: str | Path) -> list[str]:

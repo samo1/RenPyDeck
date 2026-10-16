@@ -61,9 +61,9 @@ and removed either way.*
 - **Automatic permission fixing** — sets the executable bit on the game's launch shell
   script and on the Linux runtime under its `lib` folder (the platform binary, `python`,
   `pythonw`, and the `.so` shared libraries), so games run even when the archive forgot to.
-- **Fixes for known game defects** — a few games ship with defects that get in the way of
-  playing. RenPyDeck recognises them when you launch the game and adds a small fix file
-  beside the game's scripts; the game's own files are left as they are.
+- **Room for game fixes** — RenPyDeck can recognise a game with a known defect when you
+  launch it and add a small fix file beside the game's scripts, leaving the game's own
+  files as they are. No fixes are included at the moment.
 - **Tidy installs** — every game is always extracted into its own subfolder, even when the
   archive doesn't contain a top-level folder of its own, and even when the launch script
   is buried a level or two down.
@@ -125,11 +125,9 @@ list with nothing selected.
      kept.
 3. **Play** — Choose **Launch** on an installed game. RenPyDeck runs the game's `*.sh`
    script from the game root — the folder holding `renpy` — with that folder as the working
-   directory, which is what the script expects. A game with a known defect gets its fix
-   added first (see *Fixes for known game defects* above). The game takes over in its own
-   window; RenPyDeck waits behind it with its buttons disabled, so only one game runs at a
-   time. An HTML game plays inside RenPyDeck's own window instead, until you press
-   **Quit game**.
+   directory, which is what the script expects. The game takes over in its own window;
+   RenPyDeck waits behind it with its buttons disabled, so only one game runs at a time. An
+   HTML game plays inside RenPyDeck's own window instead, until you press **Quit game**.
 4. **Remove** — Choose **Remove** to delete a game from the library, and RenPyDeck asks
    before deleting anything. For a game that is installed *and* still has its archive, the
    question offers all three answers — **Remove game**, **Remove archive**, **Remove
