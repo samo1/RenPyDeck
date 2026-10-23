@@ -33,6 +33,9 @@ from pathlib import Path
 
 #: Archive extensions treated as downloaded games. Longest first, so that
 #: ``.tar.bz2`` wins over ``.bz2`` when stripping the suffix off a name.
+#: A bare ``.bz2``, ``.gz`` or ``.xz`` is listed too: some games ship as a
+#: tar archive under that name, and telling one from a single compressed file
+#: would mean decompressing it, so installing finds out instead.
 ARCHIVE_SUFFIXES = (
     ".tar.bz2",
     ".tar.gz",
@@ -45,6 +48,9 @@ ARCHIVE_SUFFIXES = (
     ".zip",
     ".rar",
     ".7z",
+    ".bz2",
+    ".gz",
+    ".xz",
 )
 
 #: How far below a game's folder its root — the folder with ``renpy`` and the

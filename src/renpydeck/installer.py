@@ -19,7 +19,9 @@ folder of their own, some spill their files loose — and always creating the
 folder ourselves keeps installed games consistently named either way.
 
 Extraction is done with the standard library for zip and tar archives, and with
-whichever external extractor is available for the rest (`.rar`, `.7z`). The
+whichever external extractor is available for the rest (`.rar`, `.7z`). A bare
+``.bz2``, ``.gz`` or ``.xz`` is read as a compressed tar archive, which is how
+games ship under those names; one that holds a single file is refused. The
 GNOME runtime the Flatpak is built on ships ``bsdtar``, which reads all of
 them.
 
@@ -27,6 +29,9 @@ This module does no GTK work: it is called from a worker thread so a big
 archive never freezes the interface.
 """
 
+import bz2
+import gzip
+import lzma
 import os
 import shutil
 import subprocess
@@ -55,6 +60,15 @@ _TAR_SUFFIXES = (
     ".tgz",
     ".txz",
 )
+
+#: Compressed-file extensions read as a tar archive, though their name does
+#: not say so. The opener reads the plain compressed stream, to tell a single
+#: compressed file from a damaged one when the tar inside is missing.
+_BARE_COMPRESSED_OPENERS = {
+    ".bz2": bz2.open,
+    ".gz": gzip.open,
+    ".xz": lzma.open,
+}
 
 #: External extractors tried in order for everything else, most preferred
 #: first. Each entry maps the tool name to a function building its argv.
@@ -155,14 +169,39 @@ def _extract(archive: Path, dest: Path) -> None:
             with zipfile.ZipFile(archive) as zip_file:
                 zip_file.extractall(dest)  # sanitises member paths
             return
-        if lowered.endswith(_TAR_SUFFIXES):
+        if lowered.endswith(_TAR_SUFFIXES + tuple(_BARE_COMPRESSED_OPENERS)):
             with tarfile.open(archive) as tar_file:
                 tar_file.extractall(dest, filter="data")
             return
+    except tarfile.ReadError as error:
+        if _is_single_compressed_file(archive):
+            raise InstallError(
+                f"{archive.name} holds a single compressed file, not an "
+                "archive with a game in it."
+            ) from error
+        raise InstallError(f"Could not unpack {archive.name}: {error}") from error
     except (OSError, zipfile.BadZipFile, tarfile.TarError) as error:
         raise InstallError(f"Could not unpack {archive.name}: {error}") from error
 
     _extract_externally(archive, dest)
+
+
+def _is_single_compressed_file(archive: Path) -> bool:
+    """True when *archive* is a readable ``.bz2``/``.gz``/``.xz`` file.
+
+    Asked only once the archive has turned out not to be a tar archive, so a
+    readable stream means a single compressed file rather than a damaged one.
+    Reading its first bytes decompresses one block at most.
+    """
+    opener = _BARE_COMPRESSED_OPENERS.get(archive.suffix.lower())
+    if opener is None:
+        return False
+    try:
+        with opener(archive) as stream:
+            stream.read(512)
+    except (OSError, EOFError, lzma.LZMAError):
+        return False
+    return True
 
 
 def _extract_externally(archive: Path, dest: Path) -> None:
